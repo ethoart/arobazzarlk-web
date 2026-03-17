@@ -1,0 +1,110 @@
+
+import { Context } from "@netlify/functions";
+import { MongoClient, ObjectId } from "mongodb";
+
+// Cache the database connection to reuse across requests for performance
+let cachedDb: any = null;
+
+async function connectToDatabase() {
+  if (cachedDb) return cachedDb;
+  
+  const uri = process.env.MONGODB_URI;
+  if (!uri) return null;
+
+  console.log("Initializing new MongoDB connection...");
+  const client = new MongoClient(uri);
+  await client.connect();
+  const db = client.db("arobazzar");
+  cachedDb = db;
+  return db;
+}
+
+const COMMON_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate", // CRITICAL: Prevent caching
+  "Pragma": "no-cache",
+  "Expires": "0",
+  "Content-Type": "application/json"
+};
+
+export default async (req: Request, context: Context) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: COMMON_HEADERS });
+  }
+
+  // Check configuration
+  if (!process.env.MONGODB_URI) {
+    console.log("No MONGODB_URI set. Returning fallback signal.");
+    return new Response(JSON.stringify({ useFallback: true }), {
+      status: 200, 
+      headers: COMMON_HEADERS
+    });
+  }
+
+  try {
+    const db = await connectToDatabase();
+    
+    // Robust URL Parsing
+    const url = new URL(req.url);
+    // Remove leading /api/ and split by /
+    // e.g., /api/products/123 -> ['products', '123']
+    const pathParts = url.pathname.replace(/^\/?api\/?/, '').split('/').filter(Boolean);
+    
+    // Default to 'products' if root api is hit
+    const collectionName = pathParts[0] || "products"; 
+    const id = pathParts[1]; 
+
+    console.log(`[API] Method: ${req.method} | Collection: ${collectionName} | ID: ${id || 'N/A'}`);
+
+    const collection = db.collection(collectionName);
+
+    // GET: List or Single
+    if (req.method === "GET") {
+      if (id) {
+          const item = await collection.findOne({ id: id });
+          return new Response(JSON.stringify(item || {}), { status: 200, headers: COMMON_HEADERS });
+      }
+      const items = await collection.find({}).toArray();
+      return new Response(JSON.stringify(items), { status: 200, headers: COMMON_HEADERS });
+    }
+
+    // POST/PUT: Create or Update
+    if (req.method === "POST" || req.method === "PUT") {
+      const body = await req.json();
+      
+      // Ensure we have an ID
+      if (!body.id) body.id = new ObjectId().toString(); 
+      
+      console.log(`[API] Saving item to ${collectionName}:`, body.id);
+
+      // Upsert (Update if exists, Insert if new)
+      await collection.replaceOne({ id: body.id }, body, { upsert: true });
+      
+      return new Response(JSON.stringify(body), { status: 200, headers: COMMON_HEADERS });
+    }
+
+    // PATCH: Partial Update
+    if (req.method === "PATCH" && id) {
+       const updates = await req.json();
+       console.log(`[API] Updating ${collectionName} ${id}`, updates);
+       await collection.updateOne({ id: id }, { $set: updates });
+       return new Response(JSON.stringify({ success: true }), { status: 200, headers: COMMON_HEADERS });
+    }
+
+    // DELETE: Remove
+    if (req.method === "DELETE" && id) {
+        console.log(`[API] Deleting from ${collectionName}:`, id);
+        await collection.deleteOne({ id: id });
+        return new Response(JSON.stringify({ deleted: true }), { status: 200, headers: COMMON_HEADERS });
+    }
+
+    return new Response(JSON.stringify({ error: "Method not supported" }), { status: 405, headers: COMMON_HEADERS });
+
+  } catch (error: any) {
+    console.error("API Error:", error);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: COMMON_HEADERS });
+  }
+};

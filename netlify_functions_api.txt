@@ -1,0 +1,67 @@
+import { Context, Config } from "@netlify/functions";
+import { MongoClient, ObjectId } from "mongodb";
+
+// Cache the database connection to reuse across requests
+let cachedDb: any = null;
+
+async function connectToDatabase() {
+  if (cachedDb) return cachedDb;
+  
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("MONGODB_URI missing");
+
+  const client = new MongoClient(uri);
+  await client.connect();
+  const db = client.db("arobazzar");
+  cachedDb = db;
+  return db;
+}
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS"
+};
+
+export default async (req: Request, context: Context) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  const url = new URL(req.url);
+  const pathParts = url.pathname.split("/").filter(p => p !== "api" && p !== ".netlify" && p !== "functions");
+  const collectionName = pathParts[0]; 
+  const id = pathParts[1]; 
+
+  if (!process.env.MONGODB_URI) {
+    return new Response(JSON.stringify({ error: "Database not configured" }), {
+      status: 503, 
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+    });
+  }
+
+  try {
+    const db = await connectToDatabase();
+    const collection = db.collection(collectionName);
+
+    if (req.method === "GET") {
+      if (id) {
+          const item = await collection.findOne({ id: id });
+          return new Response(JSON.stringify(item), { status: 200, headers: CORS_HEADERS });
+      }
+      const items = await collection.find({}).toArray();
+      return new Response(JSON.stringify(items), { status: 200, headers: CORS_HEADERS });
+    }
+
+    if (req.method === "POST") {
+      const body = await req.json();
+      if (!body.id) body.id = new ObjectId().toString(); 
+      await collection.replaceOne({ id: body.id }, body, { upsert: true });
+      return new Response(JSON.stringify(body), { status: 201, headers: CORS_HEADERS });
+    }
+
+    return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: CORS_HEADERS });
+  }
+};

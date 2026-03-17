@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+/**
+ * @title Arobazzar Secure Payment Gateway V4
+ * @dev Securely accepts payments and IMMEDIATELY forwards them to the store's wallet.
+ *      SECURITY FEATURES:
+ *      1. Immediate Forwarding: Funds never stay in the contract.
+ *      2. Access Control: Only the Owner (Deployer) can update settings.
+ *      3. Transparency: Store details are verified on-chain.
+ */
+
+interface IERC20 {
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+}
+
+contract ArobazzarSecurePayment {
+    // --- Store Verification Details (Visible on Blockchain) ---
+    string public constant STORE_NAME = "Arobazzar Sri Lanka";
+    string public constant OFFICIAL_WEBSITE = "https://arobazzar.lk";
+    string public constant SUPPORT_EMAIL = "support@arobazzar.lk";
+    
+    // --- Roles ---
+    address public owner;      // The Admin (The wallet that deployed this contract)
+    address public recipient;  // The Wallet receiving the funds
+
+    // Events for transparency
+    event PaymentReceived(address indexed payer, uint256 amount, string currency, string orderId, string details);
+    event RecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
+
+    /**
+     * @dev Constructor
+     * @param _recipient The wallet address where you want to receive payments.
+     * The wallet deploying this contract is automatically set as the 'owner'.
+     */
+    constructor(address _recipient) {
+        require(_recipient != address(0), "Invalid recipient address");
+        recipient = _recipient;
+        owner = msg.sender; // The deployer becomes the Admin
+    }
+
+    /**
+     * @dev Modifier to ensure only the Owner can call specific functions.
+     */
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Security Alert: Unauthorized Access. Only the contract owner can do this.");
+        _;
+    }
+
+    /**
+     * @notice Pay with ETH (Base ETH)
+     * Funds are immediately forwarded to the recipient wallet.
+     */
+    function payETH(string calldata orderId, string calldata details) external payable {
+        require(msg.value > 0, "Amount must be > 0");
+        
+        // Auto-forward ETH to the merchant wallet immediately
+        (bool success, ) = payable(recipient).call{value: msg.value}("");
+        require(success, "ETH Forwarding failed");
+
+        emit PaymentReceived(msg.sender, msg.value, "ETH", orderId, details);
+    }
+
+    /**
+     * @notice Pay with ERC20 Tokens (USDC, USDT)
+     * Tokens are moved directly from Customer -> Merchant Wallet.
+     * The contract acts as a bridge and does not hold tokens.
+     */
+    function payToken(address token, uint256 amount, string calldata orderId, string calldata details) external {
+        require(amount > 0, "Amount must be > 0");
+        
+        // Transfer tokens directly from Customer -> Recipient
+        bool success = IERC20(token).transferFrom(msg.sender, recipient, amount);
+        require(success, "Token Transfer failed. Check allowance.");
+
+        emit PaymentReceived(msg.sender, amount, "ERC20", orderId, details);
+    }
+
+    /**
+     * @dev Update the receiving wallet address.
+     * Only the OWNER can do this. This is secure even if your recipient is an exchange address.
+     */
+    function updateRecipient(address _newRecipient) external onlyOwner {
+        require(_newRecipient != address(0), "Invalid address");
+        emit RecipientUpdated(recipient, _newRecipient);
+        recipient = _newRecipient;
+    }
+
+    /**
+     * @dev Transfer admin rights to a new wallet.
+     * Use this if you want to change the wallet that manages this contract.
+     */
+    function transferOwnership(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, _newOwner);
+        owner = _newOwner;
+    }
+}

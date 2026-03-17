@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <meta name="theme-color" content="#000000" />
+    <title>Arobazzar - Premium Fashion & Lifestyle Store</title>
+    
+    <!-- Performance Optimization: Resource Hints -->
+    <link rel="dns-prefetch" href="https://raw.githubusercontent.com">
+    <link rel="dns-prefetch" href="https://gateway.pinata.cloud">
+    <link rel="dns-prefetch" href="https://placehold.co">
+    <link rel="dns-prefetch" href="https://wsrv.nl">
+    
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://placehold.co" crossorigin>
+    <link rel="preconnect" href="https://wsrv.nl" crossorigin>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Discover Arobazzar, the ultimate online destination for premium fashion, exclusive streetwear drops, luxury watches, and modern electronics in Sri Lanka. Fast delivery and secure payments." />
+    <meta name="keywords" content="arobazzar, sri lanka fashion, online store lk, streetwear sri lanka, luxury watches, buy electronics online, best online shop sri lanka" />
+    <meta name="author" content="Arobazzar Inc." />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://arobazzar.lk/" />
+    <meta property="og:title" content="Arobazzar - The Future of Retail" />
+    <meta property="og:description" content="Premium quality, verified authenticity, delivered worldwide. Shop the latest trends in fashion and tech today." />
+    <meta property="og:image" content="https://raw.githubusercontent.com/ethoart/arobazzar-img/main/photo_2025-12-07_13-20-00.jpg" />
+    <meta property="og:site_name" content="Arobazzar" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://arobazzar.lk/" />
+    <meta name="twitter:title" content="Arobazzar - The Future of Retail" />
+    <meta name="twitter:description" content="Premium quality, verified authenticity, delivered worldwide. Shop the latest trends in fashion and tech today." />
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/ethoart/arobazzar-img/main/photo_2025-12-07_13-20-00.jpg" />
+
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "ethers": "https://aistudiocdn.com/ethers@^6.16.0",
+    "@netlify/functions": "https://aistudiocdn.com/@netlify/functions@^5.1.1",
+    "nodemailer": "https://aistudiocdn.com/nodemailer@^7.0.11",
+    "mongodb": "https://aistudiocdn.com/mongodb@^7.0.0"
+  }
+}
+</script>
+    
+    <!-- Default Favicon Placeholder -->
+    <link id="dynamic-favicon" rel="icon" href="https://raw.githubusercontent.com/ethoart/arobazzar-img/main/favicona.png">
+    
+    <!-- IMMEDIATE FAVICON RESTORE -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('arobazzar_settings');
+          if (saved) {
+            var s = JSON.parse(saved);
+            if (s.siteFavicon && s.siteFavicon.length > 5) {
+              var link = document.getElementById('dynamic-favicon');
+              if (link) link.href = s.siteFavicon;
+            }
+          }
+        } catch(e) { console.error('Favicon restore error:', e); }
+      })();
+    </script>
+    
+    <!-- Preconnect for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+      // Polyfill for process.env
+      window.process = {
+        env: {
+          NODE_ENV: 'development',
+          REACT_APP_API_URL: '/api',
+          API_KEY: ''
+        }
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'sans': ['Inter', 'sans-serif'],
+              'display': ['Space Grotesk', 'sans-serif'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'slide-up': 'slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'scale-in': 'scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'float': 'float 6s ease-in-out infinite',
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'loading-progress': 'loadingProgress 2s ease-in-out infinite',
+            },
+            keyframes: {
+              'fadeIn': {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              'slideUp': {
+                '0%': { opacity: '0', transform: 'translateY(40px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              'scaleIn': {
+                '0%': { opacity: '0', transform: 'scale(0.9)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
+              },
+              'float': {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-20px)' },
+              },
+              'loadingProgress': {
+                '0%': { transform: 'scaleX(0)', transformOrigin: 'left' },
+                '45%': { transform: 'scaleX(1)', transformOrigin: 'left' },
+                '50%': { transform: 'scaleX(1)', transformOrigin: 'right' },
+                '100%': { transform: 'scaleX(0)', transformOrigin: 'right' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Strictly enforce fonts to prevent FOUT (Flash of Unstyled Text) */
+      :root {
+        --font-sans: 'Inter', sans-serif;
+        --font-display: 'Space Grotesk', sans-serif;
+      }
+      
+      body { 
+        font-family: var(--font-sans); 
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow-x: hidden;
+      }
+      
+      h1, h2, h3, h4, h5, h6, .font-display { 
+        font-family: var(--font-display); 
+      }
+      
+      /* Ensure font-display: swap behavior for performance */
+      @font-face {
+        font-family: 'Inter';
+        font-display: swap;
+      }
+      
+      @font-face {
+        font-family: 'Space Grotesk';
+        font-display: swap;
+      }
+      
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+      
+      .hide-scrollbar::-webkit-scrollbar { display: none; }
+      .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* Will-change optimization helper */
+      .will-change-transform { will-change: transform; }
+      
+      /* Image Loading Performance Improvements */
+      .shimmer {
+        background: linear-gradient(to right, #f6f7f8 8%, #edeef1 18%, #f6f7f8 33%);
+        background-size: 2000px 100%;
+        animation: shimmer 2s infinite linear;
+      }
+      @keyframes shimmer {
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>
