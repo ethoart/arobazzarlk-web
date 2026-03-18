@@ -723,7 +723,6 @@ const WalletSelectionModal: React.FC<{ onClose: () => void; onSelect: (type: 'ME
 
 const CheckoutPage: React.FC = () => {
     const { cart, clearCart, addOrder, notify, settings, validateDiscount, navigateTo } = useShop();
-    const [step, setStep] = useState<'details' | 'payment'>('details');
     const [formData, setFormData] = useState(() => {
         try {
             const local = localStorage.getItem('arobazzar_customer');
@@ -772,7 +771,7 @@ const CheckoutPage: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (isCrypto && step === 'payment') {
+        if (isCrypto) {
             const fetchRate = async () => {
                 const type = paymentMethod === PaymentMethod.BASE_ETH ? 'ETH' : 'USD';
                 try {
@@ -783,7 +782,7 @@ const CheckoutPage: React.FC = () => {
             };
             fetchRate();
         }
-    }, [isCrypto, step, paymentMethod, finalTotal]);
+    }, [isCrypto, paymentMethod, finalTotal]);
 
     const handleApplyCoupon = () => {
         if (!couponCode) return;
@@ -803,17 +802,18 @@ const CheckoutPage: React.FC = () => {
         if (addr) { setWalletAddress(addr); notify("Wallet Connected", "success"); }
     };
 
-    const handleProceedToPayment = () => {
-        if (!formData.name || formData.name.trim().length < 3) { notify("Please enter your full name (min 3 chars)", "error"); return; }
+    const validateForm = () => {
+        if (!formData.name || formData.name.trim().length < 3) { notify("Please enter your full name (min 3 chars)", "error"); return false; }
         const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
-        if (!emailRegex.test(formData.email)) { notify("Please enter a valid email address", "error"); return; }
+        if (!emailRegex.test(formData.email)) { notify("Please enter a valid email address", "error"); return false; }
         const phoneClean = formData.phone.replace(/[^0-9+]/g, '');
-        if (phoneClean.length < 9 || phoneClean.length > 15) { notify("Please enter a valid phone number", "error"); return; }
-        if (!formData.address || formData.address.trim().length < 10) { notify("Please enter a complete delivery address", "error"); return; }
-        setStep('payment');
+        if (phoneClean.length < 9 || phoneClean.length > 15) { notify("Please enter a valid phone number", "error"); return false; }
+        if (!formData.address || formData.address.trim().length < 10) { notify("Please enter a complete delivery address", "error"); return false; }
+        return true;
     };
 
     const handlePayHerePayment = async () => {
+        if (!validateForm()) return;
         const payhereConfig = settings?.paymentGateways?.find(g => g.id === PaymentMethod.PAYHERE);
         if (!payhereConfig || !payhereConfig.payhereMerchantId || !payhereConfig.payhereSecret) {
             notify("PayHere is not properly configured.", "error");
@@ -896,6 +896,7 @@ const CheckoutPage: React.FC = () => {
 
     const handlePlaceOrder = async (preGeneratedOrderId?: string) => {
         if (!paymentMethod) return;
+        if (!validateForm()) return;
         if (paymentMethod === PaymentMethod.BANK_DEPOSIT && !transactionRef && !slipUrl) { notify("Please enter the Reference or upload a Slip", "error"); return; }
         setIsProcessing(true);
         try {
@@ -942,243 +943,277 @@ const CheckoutPage: React.FC = () => {
     const paypalGateway = settings?.paymentGateways?.find(g => g.id === PaymentMethod.PAYPAL);
     const paypalClientId = paypalGateway?.paypalClientId;
 
+    const orderSummary = (
+        <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-gray-100 h-fit sticky top-8">
+            <h4 className="font-display font-black text-gray-900 mb-6 uppercase tracking-tight text-xl">Order Summary</h4>
+            <div className="space-y-4 mb-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                {cart.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 border border-gray-50">
+                                <img src={db.getOptimizedImage(item.images?.[0], 100)} alt={item.name} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex flex-col">
+                                <p className="font-bold text-gray-900 leading-tight line-clamp-1">{item.name}</p>
+                                <p className="text-xs text-gray-500 mt-1 font-medium">
+                                    Qty: {item.quantity} 
+                                    {item.selectedSize ? ` | ${item.selectedSize}` : ''} 
+                                    {item.selectedColor ? ` | ${item.selectedColor}` : ''}
+                                </p>
+                            </div>
+                        </div>
+                        <span className="font-bold text-gray-900 whitespace-nowrap">LKR {(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                ))}
+            </div>
+            
+            <div className="space-y-3 pt-6 border-t border-gray-100">
+                <div className="flex justify-between text-gray-500 font-medium"><span>Subtotal</span><span>LKR {subTotal.toFixed(2)}</span></div>
+                <div className="flex justify-between text-gray-500 font-medium"><span>Delivery</span><span>LKR {deliveryCharge.toFixed(2)}</span></div>
+                {discountApplied && (
+                    <div className="flex justify-between text-green-600 font-bold bg-green-50 p-2 rounded-lg">
+                        <span>Discount ({discountApplied.code})</span>
+                        <span>- LKR {discountApplied.amount.toFixed(2)}</span>
+                    </div>
+                )}
+                <div className="border-t border-gray-100 mt-4 pt-4">
+                    <div className="flex justify-between items-end">
+                        <span className="text-gray-500 font-bold uppercase text-xs tracking-widest mb-1">Total Amount</span>
+                        <span className="font-display font-black text-gray-900 text-3xl tracking-tight">LKR {finalTotal.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-gray-100">
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-3 ml-1">Have a coupon?</label>
+                <div className="flex gap-2">
+                    <input 
+                        placeholder="CODE" 
+                        className="flex-1 bg-gray-50 border-2 border-transparent focus:border-black p-3 rounded-xl font-bold text-sm outline-none uppercase transition-all" 
+                        value={couponCode} 
+                        onChange={e => setCouponCode(e.target.value.toUpperCase())} 
+                    />
+                    <button onClick={handleApplyCoupon} className="bg-black text-white px-5 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors uppercase tracking-wider">Apply</button>
+                </div>
+            </div>
+        </div>
+    );
+
     return (
         <PayPalScriptProvider options={{ "clientId": paypalClientId || "sb", currency: "USD", intent: "capture" }}>
             {showWalletSelector && <WalletSelectionModal onClose={() => setShowWalletSelector(false)} onSelect={handleWalletSelect} />}
-            <div className="max-w-3xl mx-auto p-4 md:p-8 animate-fade-in">
-                <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] w-full overflow-hidden shadow-sm border border-gray-100 flex flex-col">
-                    <div className="p-4 md:p-8 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-                        <h2 className="text-lg md:text-2xl font-display font-black uppercase tracking-tight">Checkout</h2>
+            <div className="max-w-7xl mx-auto p-4 md:p-8 animate-fade-in">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* Left Side: Order Summary */}
+                    <div className="lg:col-span-5 order-1 lg:order-1">
+                        {orderSummary}
                     </div>
-                    <div className="flex-1 p-4 md:p-8 bg-gray-50/50">
-                        {step === 'details' ? (
-                            <div className="space-y-6">
-                                <div className="space-y-4">
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 pl-2">Customer Info</label>
-                                    <input placeholder="Full Name" type="text" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm mb-4" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} aria-label="Full Name"/>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                        <input placeholder="Email" type="email" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} aria-label="Email"/>
-                                        <input placeholder="Phone" type="tel" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} aria-label="Phone"/>
-                                    </div>
-                                    <textarea placeholder="Shipping Address" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} aria-label="Address"></textarea>
-                                </div>
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Discount Code</label>
-                                    <div className="flex gap-2">
-                                        <input placeholder="Enter Code (e.g. WELCOME10)" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-black p-3 rounded-xl font-medium text-base outline-none uppercase" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} aria-label="Discount Code"/>
-                                        <button onClick={handleApplyCoupon} className="bg-black text-white px-6 rounded-xl font-bold hover:bg-gray-800">Apply</button>
-                                    </div>
-                                    {discountApplied && (<div className="text-green-600 text-sm font-bold flex items-center gap-2"><CheckCircle size={14}/> Code applied: {discountApplied.code}</div>)}
-                                </div>
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                    <h4 className="font-bold text-gray-900 mb-4">Order Summary</h4>
-                                    <div className="space-y-3 mb-4 max-h-40 overflow-y-auto pr-2">
-                                        {cart.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between items-center text-sm">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden">
-                                                        <img src={db.getOptimizedImage(item.images?.[0], 100)} alt={item.name} className="w-full h-full object-cover" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-gray-900">{item.name}</p>
-                                                        <p className="text-xs text-gray-500">Qty: {item.quantity} {item.selectedSize ? `| Size: ${item.selectedSize}` : ''} {item.selectedColor ? `| Color: ${item.selectedColor}` : ''}</p>
-                                                    </div>
-                                                </div>
-                                                <span className="font-bold text-gray-900">LKR {(item.price * item.quantity).toFixed(2)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="border-t border-gray-100 my-2 pt-2"></div>
-                                    <div className="flex justify-between text-gray-500 mb-2"><span>Subtotal</span><span>LKR {subTotal.toFixed(2)}</span></div>
-                                    <div className="flex justify-between text-gray-500 mb-2"><span>Delivery</span><span>LKR {deliveryCharge.toFixed(2)}</span></div>
-                                    {discountApplied && (<div className="flex justify-between text-green-600 mb-2 font-bold"><span>Discount</span><span>- LKR {discountApplied.amount.toFixed(2)}</span></div>)}
-                                    <div className="border-t border-gray-100 my-2 pt-2"></div><h4 className="font-bold text-gray-900 flex justify-between text-xl"><span>TOTAL</span><span>LKR {finalTotal.toFixed(2)}</span></h4>
-                                </div>
+
+                    {/* Right Side: Forms */}
+                    <div className="lg:col-span-7 order-2 lg:order-2">
+                        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
+                            <div className="p-6 md:p-8 border-b border-gray-100 bg-white shrink-0">
+                                <h2 className="text-lg md:text-2xl font-display font-black uppercase tracking-tight">
+                                    Checkout
+                                </h2>
                             </div>
-                        ) : (
-                            <div className="space-y-6">
-                                 <div className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4 pl-2">Select Payment Method</div>
-                                {availableMethods.length === 0 ? (<div className="text-center p-8 bg-red-50 text-red-500 rounded-2xl font-bold">No payment methods enabled in Admin settings.</div>) : (
+                            <div className="flex-1 p-6 md:p-8 bg-gray-50/50">
+                                <div className="space-y-12">
+                                    {/* Customer Details */}
                                     <div className="space-y-6">
-                                        {/* Card & Wallets */}
-                                        {availableMethods.some(m => m.id === PaymentMethod.PAYHERE || m.id === PaymentMethod.PAYPAL) && (
-                                            <div className="space-y-3">
-                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Card & Digital Wallets</h4>
-                                                {availableMethods.filter(m => m.id === PaymentMethod.PAYHERE || m.id === PaymentMethod.PAYPAL).map(m => { 
-                                                    const isSelected = paymentMethod === m.id; 
-                                                    return (
-                                                        <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
-                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600 text-white`}>
-                                                                {m.id === PaymentMethod.PAYPAL ? <span className="font-bold text-xs">PayPal</span> : <CreditCard size={24}/>}
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-bold text-base md:text-lg">{m.id === PaymentMethod.PAYHERE ? 'Card / Google Pay / Apple Pay (PayHere)' : m.nameOverride || m.id}</div>
-                                                                <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
-                                                            </div>
-                                                        </div>
-                                                    ); 
-                                                })}
+                                        <div className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4 pl-2">1. Customer Details</div>
+                                        <div className="space-y-4">
+                                            <input placeholder="Full Name" type="text" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} aria-label="Full Name"/>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <input placeholder="Email" type="email" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} aria-label="Email"/>
+                                                <input placeholder="Phone" type="tel" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} aria-label="Phone"/>
                                             </div>
-                                        )}
-
-                                        {/* Other Methods */}
-                                        {availableMethods.some(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD) && (
-                                            <div className="space-y-3">
-                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Other Methods</h4>
-                                                {availableMethods.filter(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD).sort((a) => a.id === PaymentMethod.COD ? -1 : 1).map(m => { 
-                                                    const isSelected = paymentMethod === m.id; 
-                                                    return (
-                                                        <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
-                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${m.id === PaymentMethod.COD ? 'bg-black text-white' : 'bg-indigo-600 text-white'}`}>
-                                                                {m.id === PaymentMethod.COD ? <Banknote size={24}/> : <Landmark size={24}/>}
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
-                                                                <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
-                                                            </div>
-                                                        </div>
-                                                    ); 
-                                                })}
-                                            </div>
-                                        )}
-
-                                        {/* Crypto */}
-                                        {availableMethods.some(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as PaymentMethod)) && (
-                                            <div className="space-y-3">
-                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Crypto (Base Chain)</h4>
-                                                {availableMethods.filter(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as PaymentMethod)).map(m => { 
-                                                    const isSelected = paymentMethod === m.id; 
-                                                    return (
-                                                        <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
-                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600 text-white`}>
-                                                                <Zap size={24}/>
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
-                                                                <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
-                                                            </div>
-                                                        </div>
-                                                    ); 
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                
-                                {paymentMethod === 'Bank Deposit' && (
-                                    <div className="bg-white p-6 rounded-2xl border-2 border-indigo-100 animate-fade-in space-y-4 shadow-lg">
-                                        <div className="flex items-center justify-between"><span className="text-sm font-bold text-indigo-600 uppercase tracking-wider">Transfer to this account</span></div>
-                                        <div className="grid grid-cols-1 gap-3 text-sm">
-                                            <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Bank</span><span className="font-bold text-gray-900">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.bankName || 'N/A'}</span></div>
-                                            <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Account Name</span><span className="font-bold text-gray-900">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.accountName || 'N/A'}</span></div>
-                                            <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Account No</span><span className="font-mono font-bold text-lg text-indigo-700 select-all">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.accountNumber || 'N/A'}</span></div>
-                                            <div className="flex justify-between"><span className="text-gray-500">Branch</span><span className="font-bold text-gray-900">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.branch || 'N/A'}</span></div>
+                                            <textarea placeholder="Shipping Address" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} aria-label="Address"></textarea>
                                         </div>
-                                        <div className="pt-4 border-t border-gray-100">
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 pl-1">Payment Verification</label>
-                                            <input type="text" placeholder="Enter Transaction Ref (Optional if slip uploaded)" className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-500 p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm mb-3" value={transactionRef} onChange={e => setTransactionRef(e.target.value)} aria-label="Transaction Reference"/>
-                                            
-                                            <div className="flex items-center gap-3">
-                                                <input 
-                                                    type="file" 
-                                                    id="slip-upload" 
-                                                    className="hidden" 
-                                                    accept="image/*,.pdf" 
-                                                    onChange={async (e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (!file) return;
-                                                        setIsUploadingSlip(true);
-                                                        try {
-                                                            const url = await uploadToLocal(file);
-                                                            setSlipUrl(url);
-                                                            notify("Slip uploaded successfully!", "success");
-                                                        } catch (err) {
-                                                            notify("Failed to upload slip: " + (err as Error).message, "error");
-                                                        } finally {
-                                                            setIsUploadingSlip(false);
-                                                        }
-                                                    }} 
-                                                />
-                                                <label 
-                                                    htmlFor="slip-upload" 
-                                                    className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed ${slipUrl ? 'border-green-500 bg-green-50 text-green-700' : 'border-indigo-200 hover:border-indigo-400 text-indigo-600 bg-indigo-50'} cursor-pointer transition-colors font-medium text-sm`}
-                                                >
-                                                    {isUploadingSlip ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
-                                                    {isUploadingSlip ? 'Uploading...' : slipUrl ? 'Slip Uploaded' : 'Upload Bank Slip'}
-                                                </label>
-                                                {slipUrl && (
-                                                    <button onClick={() => setSlipUrl('')} className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
-                                                        <Trash2 size={18} />
-                                                    </button>
+                                    </div>
+
+                                    {/* Payment Method */}
+                                    <div className="space-y-6">
+                                        <div className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4 pl-2">2. Payment Method</div>
+                                        {availableMethods.length === 0 ? (<div className="text-center p-8 bg-red-50 text-red-500 rounded-2xl font-bold">No payment methods enabled in Admin settings.</div>) : (
+                                            <div className="space-y-6">
+                                                {/* Card & Wallets */}
+                                                {availableMethods.some(m => m.id === PaymentMethod.PAYHERE || m.id === PaymentMethod.PAYPAL) && (
+                                                    <div className="space-y-3">
+                                                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Card & Digital Wallets</h4>
+                                                        {availableMethods.filter(m => m.id === PaymentMethod.PAYHERE || m.id === PaymentMethod.PAYPAL).map(m => { 
+                                                            const isSelected = paymentMethod === m.id; 
+                                                            return (
+                                                                <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
+                                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600 text-white`}>
+                                                                        {m.id === PaymentMethod.PAYPAL ? <span className="font-bold text-xs">PayPal</span> : <CreditCard size={24}/>}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="font-bold text-base md:text-lg">{m.id === PaymentMethod.PAYHERE ? 'Card / Google Pay / Apple Pay (PayHere)' : m.nameOverride || m.id}</div>
+                                                                        <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ); 
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* Other Methods */}
+                                                {availableMethods.some(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD) && (
+                                                    <div className="space-y-3">
+                                                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Other Methods</h4>
+                                                        {availableMethods.filter(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD).sort((a) => a.id === PaymentMethod.COD ? -1 : 1).map(m => { 
+                                                            const isSelected = paymentMethod === m.id; 
+                                                            return (
+                                                                <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
+                                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${m.id === PaymentMethod.COD ? 'bg-black text-white' : 'bg-indigo-600 text-white'}`}>
+                                                                        {m.id === PaymentMethod.COD ? <Banknote size={24}/> : <Landmark size={24}/>}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
+                                                                        <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ); 
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* Crypto */}
+                                                {availableMethods.some(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as PaymentMethod)) && (
+                                                    <div className="space-y-3">
+                                                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Crypto (Base Chain)</h4>
+                                                        {availableMethods.filter(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as PaymentMethod)).map(m => { 
+                                                            const isSelected = paymentMethod === m.id; 
+                                                            return (
+                                                                <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
+                                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600 text-white`}>
+                                                                        <Zap size={24}/>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
+                                                                        <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ); 
+                                                        })}
+                                                    </div>
                                                 )}
                                             </div>
+                                        )}
+                                        
+                                        {paymentMethod === 'Bank Deposit' && (
+                                            <div className="bg-white p-6 rounded-2xl border-2 border-indigo-100 animate-fade-in space-y-4 shadow-lg">
+                                                <div className="flex items-center justify-between"><span className="text-sm font-bold text-indigo-600 uppercase tracking-wider">Transfer to this account</span></div>
+                                                <div className="grid grid-cols-1 gap-3 text-sm">
+                                                    <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Bank</span><span className="font-bold text-gray-900">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.bankName || 'N/A'}</span></div>
+                                                    <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Account Name</span><span className="font-bold text-gray-900">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.accountName || 'N/A'}</span></div>
+                                                    <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Account No</span><span className="font-mono font-bold text-lg text-indigo-700 select-all">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.accountNumber || 'N/A'}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-500">Branch</span><span className="font-bold text-gray-900">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.branch || 'N/A'}</span></div>
+                                                </div>
+                                                <div className="pt-4 border-t border-gray-100">
+                                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 pl-1">Payment Verification</label>
+                                                    <input type="text" placeholder="Enter Transaction Ref (Optional if slip uploaded)" className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-500 p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm mb-3" value={transactionRef} onChange={e => setTransactionRef(e.target.value)} aria-label="Transaction Reference"/>
+                                                    
+                                                    <div className="flex items-center gap-3">
+                                                        <input 
+                                                            type="file" 
+                                                            id="slip-upload" 
+                                                            className="hidden" 
+                                                            accept="image/*,.pdf" 
+                                                            onChange={async (e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (!file) return;
+                                                                setIsUploadingSlip(true);
+                                                                try {
+                                                                    const url = await uploadToLocal(file);
+                                                                    setSlipUrl(url);
+                                                                    notify("Slip uploaded successfully!", "success");
+                                                                } catch (err) {
+                                                                    notify("Failed to upload slip: " + (err as Error).message, "error");
+                                                                } finally {
+                                                                    setIsUploadingSlip(false);
+                                                                }
+                                                            }} 
+                                                        />
+                                                        <label 
+                                                            htmlFor="slip-upload" 
+                                                            className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed ${slipUrl ? 'border-green-500 bg-green-50 text-green-700' : 'border-indigo-200 hover:border-indigo-400 text-indigo-600 bg-indigo-50'} cursor-pointer transition-colors font-medium text-sm`}
+                                                        >
+                                                            {isUploadingSlip ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
+                                                            {isUploadingSlip ? 'Uploading...' : slipUrl ? 'Slip Uploaded' : 'Upload Bank Slip'}
+                                                        </label>
+                                                        {slipUrl && (
+                                                            <button onClick={() => setSlipUrl('')} className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        )}
+                                                    </div>
 
-                                            <p className="text-xs text-indigo-500 mt-3 font-medium flex items-center gap-1"><AlertCircle size={12}/> Please transfer the exact amount and enter the reference ID or upload the slip.</p>
-                                        </div>
+                                                    <p className="text-xs text-indigo-500 mt-3 font-medium flex items-center gap-1"><AlertCircle size={12}/> Please transfer the exact amount and enter the reference ID or upload the slip.</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {isCrypto && (<div className="bg-white p-6 rounded-2xl border-2 border-blue-100 animate-fade-in space-y-4"><div className="flex items-center justify-between"><span className="text-sm font-bold text-gray-400 uppercase tracking-wider">Conversion</span><span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">Live Rate</span></div><div className="text-3xl font-display font-black text-blue-900">{exchangeRate > 0 ? (<>{convertedAmount.toFixed(6)} <span className="text-lg text-blue-400">{paymentMethod === PaymentMethod.BASE_ETH ? 'ETH' : 'USD'}</span></>) : <div className="animate-pulse h-8 w-32 bg-gray-200 rounded"></div>}</div><div className="text-sm text-gray-400 font-medium">Equivalent to LKR {finalTotal.toFixed(2)}</div><div className="pt-4 border-t border-gray-100">{!walletAddress ? (<Button onClick={() => setShowWalletSelector(true)} variant="secondary" className="w-full"><Wallet size={18}/> Connect Web3 Wallet</Button>) : (<div className="flex items-center justify-between bg-gray-50 p-3 rounded-xl"><div className="flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full"></div><span className="text-xs font-mono font-bold text-gray-600">{(walletAddress || "").slice(0, 6)}...{(walletAddress || "").slice(-4)}</span></div><button onClick={() => setWalletAddress(null)} className="text-xs text-red-500 hover:underline">Disconnect</button></div>)}</div><p className="text-xs text-center text-gray-400 mt-2">Powered by Base Chain</p></div>)}
                                     </div>
-                                )}
-                                
-                                {isCrypto && (<div className="bg-white p-6 rounded-2xl border-2 border-blue-100 animate-fade-in space-y-4"><div className="flex items-center justify-between"><span className="text-sm font-bold text-gray-400 uppercase tracking-wider">Conversion</span><span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">Live Rate</span></div><div className="text-3xl font-display font-black text-blue-900">{exchangeRate > 0 ? (<>{convertedAmount.toFixed(6)} <span className="text-lg text-blue-400">{paymentMethod === PaymentMethod.BASE_ETH ? 'ETH' : 'USD'}</span></>) : <div className="animate-pulse h-8 w-32 bg-gray-200 rounded"></div>}</div><div className="text-sm text-gray-400 font-medium">Equivalent to LKR {finalTotal.toFixed(2)}</div><div className="pt-4 border-t border-gray-100">{!walletAddress ? (<Button onClick={() => setShowWalletSelector(true)} variant="secondary" className="w-full"><Wallet size={18}/> Connect Web3 Wallet</Button>) : (<div className="flex items-center justify-between bg-gray-50 p-3 rounded-xl"><div className="flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full"></div><span className="text-xs font-mono font-bold text-gray-600">{(walletAddress || "").slice(0, 6)}...{(walletAddress || "").slice(-4)}</span></div><button onClick={() => setWalletAddress(null)} className="text-xs text-red-500 hover:underline">Disconnect</button></div>)}</div><p className="text-xs text-center text-gray-400 mt-2">Powered by Base Chain</p></div>)}
+                                </div>
                             </div>
-                        )}
-                    </div>
-                    <div className="p-6 md:p-8 border-t border-gray-100 bg-white flex gap-4">
-                       {step === 'payment' && (<Button variant="ghost" onClick={() => setStep('details')}>Back</Button>)}
-                       {step === 'details' ? (
-                           <Button className="w-full" onClick={handleProceedToPayment} >Proceed to Payment <ArrowRight size={20} /></Button>
-                       ) : (
-                           paymentMethod === PaymentMethod.PAYPAL ? (
-                               paypalClientId ? (
-                                   <div className="w-full space-y-3">
-                                       <PayPalButtons 
-                                           style={{ layout: "vertical", shape: "rect", label: "pay" }}
-                                           forceReRender={[finalTotal, paypalClientId]}
-                                           createOrder={(data, actions) => {
-                                               const usdAmount = (finalTotal / 300).toFixed(2);
-                                               return actions.order.create({
-                                                   intent: "CAPTURE",
-                                                   purchase_units: [{
-                                                       description: `Order from Arobazzar`,
-                                                       amount: {
-                                                           currency_code: "USD",
-                                                           value: usdAmount
-                                                       }
-                                                   }]
-                                               });
-                                           }}
-                                           onApprove={async (data, actions) => {
-                                               if (actions.order) {
-                                                    try {
-                                                        const details = await actions.order.capture();
-                                                        setTransactionRef(details.id || 'PAYPAL_TX');
-                                                        await handlePlaceOrder();
-                                                    } catch {
-                                                        notify("Payment capture failed. Please try again.", "error");
+                            <div className="p-6 md:p-8 border-t border-gray-100 bg-white flex gap-4 shrink-0">
+                                {paymentMethod === PaymentMethod.PAYPAL ? (
+                                    paypalClientId ? (
+                                        <div className="w-full space-y-3">
+                                            <PayPalButtons 
+                                                style={{ layout: "vertical", shape: "rect", label: "pay" }}
+                                                forceReRender={[finalTotal, paypalClientId]}
+                                                createOrder={(data, actions) => {
+                                                    if (!validateForm()) return Promise.reject(new Error("Form invalid"));
+                                                    const usdAmount = (finalTotal / 300).toFixed(2);
+                                                    return actions.order.create({
+                                                        intent: "CAPTURE",
+                                                        purchase_units: [{
+                                                            description: `Order from Arobazzar`,
+                                                            amount: {
+                                                                currency_code: "USD",
+                                                                value: usdAmount
+                                                            }
+                                                        }]
+                                                    });
+                                                }}
+                                                onApprove={async (data, actions) => {
+                                                    if (actions.order) {
+                                                        try {
+                                                            const details = await actions.order.capture();
+                                                            setTransactionRef(details.id || 'PAYPAL_TX');
+                                                            await handlePlaceOrder();
+                                                        } catch {
+                                                            notify("Payment capture failed. Please try again.", "error");
+                                                        }
                                                     }
-                                               }
-                                           }}
-                                           onError={(err) => {
-                                               console.error("PayPal Error:", err);
-                                               notify("PayPal Error: Could not initialize payment window. Check Client ID.", "error");
-                                           }}
-                                           onCancel={() => {
-                                               notify("Payment cancelled", "info");
-                                           }}
-                                       />
-                                   </div>
-                               ) : (
-                                   <div className="w-full p-4 bg-red-50 text-red-600 rounded-xl text-center font-bold text-sm">
-                                       PayPal Client ID is missing. Please configure it in Admin Settings.
-                                   </div>
-                               )
-                           ) : paymentMethod === PaymentMethod.PAYHERE ? (
-                               <Button className="w-full" onClick={handlePayHerePayment} disabled={isProcessing}>
-                                   {isProcessing ? 'Processing...' : 'Pay with PayHere'}
-                               </Button>
-                           ) : (
-                               <Button className="w-full" onClick={isCrypto && !walletAddress ? () => setShowWalletSelector(true) : () => handlePlaceOrder()} disabled={isProcessing}>{isProcessing ? 'Processing...' : (isCrypto && !walletAddress ? 'Connect Wallet' : 'Pay Now')}</Button>
-                           )
-                       )}
+                                                }}
+                                                onError={(err) => {
+                                                    console.error("PayPal Error:", err);
+                                                    notify("PayPal Error: Could not initialize payment window. Check Client ID.", "error");
+                                                }}
+                                                onCancel={() => {
+                                                    notify("Payment cancelled", "info");
+                                                }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="w-full p-4 bg-red-50 text-red-600 rounded-xl text-center font-bold text-sm">
+                                            PayPal Client ID is missing. Please configure it in Admin Settings.
+                                        </div>
+                                    )
+                                ) : paymentMethod === PaymentMethod.PAYHERE ? (
+                                    <Button className="w-full" onClick={handlePayHerePayment} disabled={isProcessing}>
+                                        {isProcessing ? 'Processing...' : 'Pay with PayHere'}
+                                    </Button>
+                                ) : (
+                                    <Button className="w-full" onClick={isCrypto && !walletAddress ? () => setShowWalletSelector(true) : () => handlePlaceOrder()} disabled={isProcessing}>{isProcessing ? 'Processing...' : (isCrypto && !walletAddress ? 'Connect Wallet' : 'Pay Now')}</Button>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1248,7 +1283,19 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                             <span className={`inline-block py-2 px-4 border rounded-full text-xs font-bold tracking-widest uppercase mb-4 md:mb-6 shadow-sm transition-colors duration-1000 ${isDarkText ? 'border-black/20 bg-black/10 text-black/80' : 'border-white/20 bg-white/10 text-white/80'}`}>{settings?.bannerTitle || "New Season"}</span>
                             <h1 className="text-4xl md:text-7xl font-display font-black tracking-tighter leading-[0.95] mb-4 md:mb-6 break-words drop-shadow-xl transition-colors duration-1000">{currentBanner.title || "FUTURE RETAIL."}</h1>
                             <p className={`text-lg md:text-xl font-medium max-w-md mb-8 leading-relaxed transition-colors duration-1000 ${isDarkText ? 'text-gray-800' : 'text-white/80'}`}>{currentBanner.subtitle || "Arobazzar brings you the world's most desired products."}</p>
-                            <Button variant={isDarkText ? 'primary' : 'secondary'} className="pointer-events-none" tabIndex={-1}>Explore Store <ArrowRight size={18} /></Button>
+                            <Button 
+                                variant={isDarkText ? 'primary' : 'secondary'} 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (currentBanner.linkType && currentBanner.linkType !== 'NONE' && currentBanner.linkValue) {
+                                        handleBannerClick(currentBanner.linkType, currentBanner.linkValue);
+                                    } else {
+                                        navigateTo('SHOP');
+                                    }
+                                }}
+                            >
+                                Shop Now <ArrowRight size={18} />
+                            </Button>
                         </div>
                         <div className="relative order-1 md:order-2 h-[300px] md:h-[500px] flex items-center justify-center" key={`img-${currentBannerIndex}`}>
                             <div className={`absolute inset-0 rounded-full md:blur-3xl blur-xl transform-gpu scale-75 md:animate-pulse-slow transition-colors duration-1000 ${isDarkText ? 'bg-black/20' : 'bg-white/20'}`}></div>
@@ -1308,7 +1355,22 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                         <div className="relative z-10 max-w-2xl mx-auto p-6">
                             <h2 className="text-3xl md:text-6xl font-display font-black text-white mb-6 drop-shadow-xl">{settings.middleBanner.title}</h2>
                             <p className="text-white/90 text-lg md:text-xl font-medium mb-8 drop-shadow-md">{settings.middleBanner.subtitle}</p>
-                            <Button variant="secondary" tabIndex={-1}>Shop Now</Button>
+                            <div className="flex justify-center">
+                                <Button 
+                                    variant="secondary"
+                                    className="text-lg py-5 px-10"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (settings.middleBanner?.linkType && settings.middleBanner?.linkType !== 'NONE' && settings.middleBanner?.linkValue) {
+                                            handleBannerClick(settings.middleBanner.linkType, settings.middleBanner.linkValue);
+                                        } else {
+                                            navigateTo('SHOP');
+                                        }
+                                    }}
+                                >
+                                    Shop Now <ArrowRight size={20} />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1549,12 +1611,14 @@ export const StoreFront: React.FC = () => {
                     <Logo src={settings?.siteLogo} className="h-14 w-auto object-contain" fallbackClass="text-2xl font-display font-black tracking-tighter" />
                 </button>
             </div>
-            <div className="hidden md:flex gap-8 font-bold text-sm text-gray-400">
-                <button onClick={() => navigateTo('HOME')} className={`transition-colors ${currentPage === 'HOME' ? 'text-black' : 'hover:text-black'}`}>Home</button>
-                <button onClick={() => navigateTo('SHOP')} className={`transition-colors ${currentPage === 'SHOP' ? 'text-black' : 'hover:text-black'}`}>Shop</button>
-                <button onClick={() => navigateTo('TRENDING')} className={`transition-colors ${currentPage === 'TRENDING' ? 'text-black' : 'hover:text-black'}`}>Trending</button>
-                <button onClick={() => navigateTo('CONTACT')} className="transition-colors hover:text-black">Contact</button>
-            </div>
+            {currentPage !== 'CHECKOUT' && (
+                <div className="hidden md:flex gap-8 font-bold text-sm text-gray-400">
+                    <button onClick={() => navigateTo('HOME')} className={`transition-colors ${currentPage === 'HOME' ? 'text-black' : 'hover:text-black'}`}>Home</button>
+                    <button onClick={() => navigateTo('SHOP')} className={`transition-colors ${currentPage === 'SHOP' ? 'text-black' : 'hover:text-black'}`}>Shop</button>
+                    <button onClick={() => navigateTo('TRENDING')} className={`transition-colors ${currentPage === 'TRENDING' ? 'text-black' : 'hover:text-black'}`}>Trending</button>
+                    <button onClick={() => navigateTo('CONTACT')} className="transition-colors hover:text-black">Contact</button>
+                </div>
+            )}
             <div className="flex items-center gap-4">
                  <button onClick={() => navigateTo('PROFILE')} className="p-3 rounded-full hover:bg-gray-100 transition-colors" aria-label="My Profile"><User size={20} /></button>
                 <button onClick={() => setIsCartOpen(true)} className="relative group bg-white/80 p-3 rounded-full shadow-sm hover:shadow-md transition-all hover:bg-black hover:text-white" aria-label="Open Cart"><ShoppingBag size={20} />{cart.length > 0 && (<span className="absolute -top-1 -right-1 bg-black text-white group-hover:bg-white group-hover:text-black text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white animate-scale-in">{cart.reduce((a, b) => a + b.quantity, 0)}</span>)}</button>
@@ -1565,7 +1629,21 @@ export const StoreFront: React.FC = () => {
       <div className={`fixed inset-0 z-50 bg-black/50 backdrop-blur-sm transition-opacity duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)}>
         <div className={`absolute top-0 left-0 w-3/4 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-100 flex justify-between items-center"><span className="text-2xl font-display font-black tracking-tighter">MENU</span><button onClick={() => setIsMobileMenuOpen(false)} aria-label="Close Menu"><X size={24}/></button></div>
-            <div className="flex-1 p-6 flex flex-col gap-6 font-bold text-lg"><button onClick={() => handleMobileNav('HOME')} className="text-left hover:text-gray-500">Home</button><button onClick={() => handleMobileNav('SHOP')} className="text-left hover:text-gray-500">Shop All</button><button onClick={() => handleMobileNav('TRENDING')} className="text-left hover:text-gray-500">Trending</button><button onClick={() => handleMobileNav('PROFILE')} className="text-left hover:text-gray-500">My Profile</button><button onClick={() => handleMobileNav('CONTACT')} className="text-left hover:text-gray-500">Contact Us</button><div className="border-t border-gray-100 my-2"></div><button onClick={() => { setIsMobileMenuOpen(false); setIsCartOpen(true); }} className="text-left hover:text-gray-500 flex items-center gap-2">Cart <span className="bg-black text-white text-xs px-2 py-1 rounded-full">{cart.length}</span></button></div>
+            <div className="flex-1 p-6 flex flex-col gap-6 font-bold text-lg">
+                {currentPage !== 'CHECKOUT' && (
+                    <>
+                        <button onClick={() => handleMobileNav('HOME')} className="text-left hover:text-gray-500">Home</button>
+                        <button onClick={() => handleMobileNav('SHOP')} className="text-left hover:text-gray-500">Shop All</button>
+                        <button onClick={() => handleMobileNav('TRENDING')} className="text-left hover:text-gray-500">Trending</button>
+                    </>
+                )}
+                <button onClick={() => handleMobileNav('PROFILE')} className="text-left hover:text-gray-500">My Profile</button>
+                {currentPage !== 'CHECKOUT' && (
+                    <button onClick={() => handleMobileNav('CONTACT')} className="text-left hover:text-gray-500">Contact Us</button>
+                )}
+                <div className="border-t border-gray-100 my-2"></div>
+                <button onClick={() => { setIsMobileMenuOpen(false); setIsCartOpen(true); }} className="text-left hover:text-gray-500 flex items-center gap-2">Cart <span className="bg-black text-white text-xs px-2 py-1 rounded-full">{cart.length}</span></button>
+            </div>
             <div className="p-6 bg-gray-50 text-xs text-gray-400 font-bold uppercase tracking-wider">&copy; 2024 Arobazzar</div>
         </div>
       </div>
