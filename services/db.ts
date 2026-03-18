@@ -1,9 +1,9 @@
 
-import { Product, Order, Review, SiteSettings, OrderStatus, PaymentMethod, Category } from '../types';
+import { Product, Order, Review, SiteSettings, PaymentMethod, Category } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_ORDERS } from '../constants';
 import { normalizeIpfsUrl } from './ipfs';
 
-const API_URL = (import.meta as any).env.VITE_API_URL || '/api';
+const API_URL = (import.meta as unknown as { env: Record<string, string> }).env.VITE_API_URL || '/api';
 
 const DB_KEYS = {
   PRODUCTS: 'arobazzar_products',
@@ -123,20 +123,20 @@ export const getOptimizedImage = (url: string | undefined, width: number = 600) 
 
 // ... Auth and other DB functions remain same ...
 
-export const warmUp = () => { try { fetch(`${API_URL}/settings?warmup=true`).catch(() => {}); } catch(e) {} };
+export const warmUp = () => { try { fetch(`${API_URL}/settings?warmup=true`).catch(() => {}); } catch { /* ignore */ } };
 warmUp();
 
 const fetchFromApi = async (endpoint: string, options?: RequestInit) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
-        let url = `${API_URL}${endpoint}`;
+        const url = `${API_URL}${endpoint}`;
         const token = sessionStorage.getItem('admin_token');
         const headers: HeadersInit = {
             ...options?.headers,
         };
         if (token) {
-            (headers as any)['Authorization'] = `Bearer ${token}`;
+            (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
         }
         
         const res = await fetch(url, { ...options, headers, signal: controller.signal });
@@ -145,7 +145,7 @@ const fetchFromApi = async (endpoint: string, options?: RequestInit) => {
         const data = await res.json();
         if (data && data.useFallback) throw new Error("API requested fallback");
         return data;
-    } catch (e: any) {
+    } catch {
         clearTimeout(timeoutId);
         throw new Error("FALLBACK_TO_LOCAL");
     }
@@ -176,7 +176,7 @@ export const getInitialSettings = (): SiteSettings => {
     try {
         const stored = localStorage.getItem(DB_KEYS.SETTINGS);
         if (stored) return { ...INITIAL_SETTINGS, ...JSON.parse(stored) };
-    } catch (e) {}
+    } catch { /* ignore */ }
     return INITIAL_SETTINGS;
 };
 
@@ -184,14 +184,14 @@ export const getLocalProducts = (): Product[] => {
     try {
         const stored = localStorage.getItem(DB_KEYS.PRODUCTS);
         return stored ? JSON.parse(stored) : INITIAL_PRODUCTS;
-    } catch(e) { return INITIAL_PRODUCTS; }
+    } catch { return INITIAL_PRODUCTS; }
 };
 
 export const getLocalCategories = (): Category[] => {
     try {
         const stored = localStorage.getItem(DB_KEYS.CATEGORIES);
         return stored ? JSON.parse(stored) : INITIAL_CATEGORIES;
-    } catch(e) { return INITIAL_CATEGORIES; }
+    } catch { return INITIAL_CATEGORIES; }
 };
 
 export const getProducts = async (): Promise<Product[]> => {
@@ -199,16 +199,16 @@ export const getProducts = async (): Promise<Product[]> => {
       const data = await fetchFromApi('/products');
       if (Array.isArray(data)) localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(data));
       return data;
-  } catch (e) { return getLocalProducts(); }
+  } catch { return getLocalProducts(); }
 };
 
 export const saveProduct = async (product: Product): Promise<Product> => {
   try {
       return await fetchFromApi('/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product) });
-  } catch (e) {
+  } catch {
       const products = await getProducts();
       const existingIndex = products.findIndex(p => p.id === product.id);
-      let newList = existingIndex >= 0 ? [...products] : [product, ...products];
+      const newList = existingIndex >= 0 ? [...products] : [product, ...products];
       if (existingIndex >= 0) newList[existingIndex] = product;
       localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(newList));
       return product;
@@ -216,7 +216,7 @@ export const saveProduct = async (product: Product): Promise<Product> => {
 };
 
 export const removeProduct = async (id: string): Promise<void> => {
-  try { await fetchFromApi(`/products/${id}`, { method: 'DELETE' }); } catch (e) {
+  try { await fetchFromApi(`/products/${id}`, { method: 'DELETE' }); } catch {
       const products = await getProducts();
       const newList = products.filter(p => p.id !== id);
       localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(newList));
@@ -228,16 +228,16 @@ export const getCategories = async (): Promise<Category[]> => {
         const data = await fetchFromApi('/categories');
         if (Array.isArray(data)) localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(data));
         return data;
-    } catch (e) { return getLocalCategories(); }
+    } catch { return getLocalCategories(); }
 };
 
 export const saveCategory = async (category: Category): Promise<Category> => {
     try {
         return await fetchFromApi('/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(category) });
-    } catch (e) {
+    } catch {
         const categories = await getCategories();
         const existingIndex = categories.findIndex(c => c.id === category.id);
-        let newList = existingIndex >= 0 ? [...categories] : [...categories, category];
+        const newList = existingIndex >= 0 ? [...categories] : [...categories, category];
         if (existingIndex >= 0) newList[existingIndex] = category;
         localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(newList));
         return category;
@@ -245,7 +245,7 @@ export const saveCategory = async (category: Category): Promise<Category> => {
 };
 
 export const removeCategory = async (id: string): Promise<void> => {
-    try { await fetchFromApi(`/categories/${id}`, { method: 'DELETE' }); } catch (e) {
+    try { await fetchFromApi(`/categories/${id}`, { method: 'DELETE' }); } catch {
         const categories = await getCategories();
         const newList = categories.filter(c => c.id !== id);
         localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(newList));
@@ -253,7 +253,7 @@ export const removeCategory = async (id: string): Promise<void> => {
 };
 
 export const addProductReview = async (productId: string, review: Review): Promise<void> => {
-    try { await fetchFromApi(`/products/${productId}/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(review) }); } catch (e) {
+    try { await fetchFromApi(`/products/${productId}/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(review) }); } catch {
         const products = await getProducts();
         const newList = products.map(p => p.id === productId ? { ...p, reviews: [review, ...p.reviews] } : p);
         localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(newList));
@@ -265,7 +265,7 @@ export const deleteProductReview = async (productId: string, reviewId: string): 
          const products = await getProducts();
          const product = products.find(p => p.id === productId);
          if (product) await saveProduct({ ...product, reviews: product.reviews.filter(r => r.id !== reviewId) });
-    } catch (e) {
+    } catch {
         const products = await getProducts();
         const newList = products.map(p => p.id === productId ? { ...p, reviews: p.reviews.filter(r => r.id !== reviewId) } : p);
         localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(newList));
@@ -273,7 +273,7 @@ export const deleteProductReview = async (productId: string, reviewId: string): 
 };
 
 export const getOrders = async (): Promise<Order[]> => {
-  try { return await fetchFromApi('/orders'); } catch (e) {
+  try { return await fetchFromApi('/orders'); } catch {
       const stored = localStorage.getItem(DB_KEYS.ORDERS);
       if (!stored) { localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS)); return INITIAL_ORDERS; }
       return JSON.parse(stored);
@@ -281,7 +281,7 @@ export const getOrders = async (): Promise<Order[]> => {
 };
 
 export const createOrder = async (order: Order): Promise<Order> => {
-  try { return await fetchFromApi('/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(order) }); } catch (e) {
+  try { return await fetchFromApi('/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(order) }); } catch {
       const orders = await getOrders();
       const newList = [order, ...orders];
       localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(newList));
@@ -290,7 +290,7 @@ export const createOrder = async (order: Order): Promise<Order> => {
 };
 
 export const updateOrder = async (id: string, updates: Partial<Order>): Promise<void> => {
-  try { await fetchFromApi(`/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); } catch (e) {
+  try { await fetchFromApi(`/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); } catch {
       const orders = await getOrders();
       const newList = orders.map(o => o.id === id ? { ...o, ...updates } : o);
       localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(newList));
@@ -298,7 +298,7 @@ export const updateOrder = async (id: string, updates: Partial<Order>): Promise<
 };
 
 export const removeOrder = async (id: string): Promise<void> => {
-    try { await fetchFromApi(`/orders/${id}`, { method: 'DELETE' }); } catch (e) {
+    try { await fetchFromApi(`/orders/${id}`, { method: 'DELETE' }); } catch {
         const orders = await getOrders();
         const newList = orders.filter(o => o.id !== id);
         localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(newList));
@@ -306,8 +306,8 @@ export const removeOrder = async (id: string): Promise<void> => {
 };
 
 export const getSettings = async (): Promise<SiteSettings> => {
-  let apiData: any = null;
-  try { apiData = await fetchFromApi('/settings'); if (Array.isArray(apiData)) apiData = apiData.find(s => s.id === 'global_settings') || apiData[0]; } catch (e) {}
+  let apiData: SiteSettings | null = null;
+  try { apiData = await fetchFromApi('/settings'); if (Array.isArray(apiData)) apiData = apiData.find(s => s.id === 'global_settings') || apiData[0]; } catch { /* ignore */ }
   const local = localStorage.getItem(DB_KEYS.SETTINGS);
   const source = apiData || (local ? JSON.parse(local) : INITIAL_SETTINGS);
   
@@ -316,7 +316,7 @@ export const getSettings = async (): Promise<SiteSettings> => {
   // Merge payment gateways to ensure new methods (like PayPal) appear even if not in local storage
   if (merged.paymentGateways && INITIAL_SETTINGS.paymentGateways) {
       const mergedGateways = INITIAL_SETTINGS.paymentGateways.map(initGw => {
-          const existing = merged.paymentGateways.find((g: any) => g.id === initGw.id);
+          const existing = merged.paymentGateways.find((g: { id: string }) => g.id === initGw.id);
           return existing ? existing : initGw;
       });
       merged.paymentGateways = mergedGateways;
@@ -328,5 +328,5 @@ export const getSettings = async (): Promise<SiteSettings> => {
 export const saveSettings = async (settings: SiteSettings): Promise<void> => {
   const payload = { ...settings, id: 'global_settings' };
   localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(payload));
-  try { await fetchFromApi('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch (e) {}
+  try { await fetchFromApi('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch { /* ignore */ }
 };

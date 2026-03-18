@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Product, Order, CartItem, OrderStatus, Review, SiteSettings, Notification, DiscountCode, Category } from '../types';
+import { Product, Order, CartItem, OrderStatus, Review, SiteSettings, Notification, Category } from '../types';
 import * as db from '../services/db';
 
-export type Page = 'HOME' | 'SHOP' | 'TRENDING' | 'ADMIN' | 'LOGIN' | 'PRIVACY' | 'TERMS' | 'PROFILE' | 'CONTACT' | 'PAYMENT' | 'RETURN';
+export type Page = 'HOME' | 'SHOP' | 'TRENDING' | 'ADMIN' | 'LOGIN' | 'PRIVACY' | 'TERMS' | 'PROFILE' | 'CONTACT' | 'PAYMENT' | 'RETURN' | 'CHECKOUT';
 
 interface ShopContextType {
   products: Product[];
@@ -14,7 +14,7 @@ interface ShopContextType {
   isLoading: boolean;
   notifications: Notification[];
   userOrderIds: string[];
-  navigateTo: (page: Page, state?: any) => void;
+  navigateTo: (page: Page, state?: Record<string, unknown>) => void;
   addToCart: (product: Product, color?: string, size?: string) => void;
   removeFromCart: (productId: string, color?: string, size?: string) => void;
   updateCartQuantity: (productId: string, delta: number, color?: string, size?: string) => void;
@@ -48,7 +48,8 @@ const ROUTE_MAP: Record<string, Page> = {
     '/privacy-policy': 'PRIVACY',
     '/terms-service': 'TERMS',
     '/payment-policy': 'PAYMENT',
-    '/return-policy': 'RETURN'
+    '/return-policy': 'RETURN',
+    '/checkout': 'CHECKOUT'
 };
 
 const PAGE_TO_ROUTE: Record<Page, string> = {
@@ -62,7 +63,8 @@ const PAGE_TO_ROUTE: Record<Page, string> = {
     'PRIVACY': '/privacy-policy',
     'TERMS': '/terms-service',
     'PAYMENT': '/payment-policy',
-    'RETURN': '/return-policy'
+    'RETURN': '/return-policy',
+    'CHECKOUT': '/checkout'
 };
 
 export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -76,7 +78,7 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
           const local = localStorage.getItem('arobazzar_settings');
           return local ? JSON.parse(local) : null;
-      } catch (e) { return null; }
+      } catch { return null; }
   });
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -84,7 +86,7 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
           const local = localStorage.getItem('arobazzar_cart');
           return local ? JSON.parse(local) : [];
-      } catch (e) { return []; }
+      } catch { return []; }
   });
 
   useEffect(() => {
@@ -118,9 +120,9 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // Sanitization helper
-  const sanitizeImages = (images: any): string[] => {
+  const sanitizeImages = (images: unknown): string[] => {
     if (!Array.isArray(images)) return [PLACEHOLDER_IMG];
-    const filtered = images
+    const filtered = (images as string[])
       .filter(url => typeof url === 'string' && url.trim().length > 5)
       .map(url => url.trim());
     return filtered.length > 0 ? filtered : [PLACEHOLDER_IMG];
@@ -182,27 +184,28 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Finally, hide loader once settings and products are definitively synced
         setIsLoading(false);
 
-      } catch (e) {
-        console.error("Failed to load data", e);
+      } catch {
+        console.error("Failed to load data");
         setIsLoading(false);
       }
     };
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval>;
     if (currentPage === 'ADMIN') {
         const fetchOrders = async () => {
             try {
                 const fetchedOrders = await db.getOrders();
                 if (Array.isArray(fetchedOrders)) {
-                     const safeOrders = fetchedOrders.map((ord: any) => ({
+                     const safeOrders = fetchedOrders.map((ord: Order) => ({
                         ...ord,
                         id: ord.id || 'UNKNOWN_ID',
                         customerEmail: ord.customerEmail || '',
                         total: typeof ord.total === 'number' && !isNaN(ord.total) ? ord.total : 0,
-                        items: (Array.isArray(ord.items) ? ord.items : []).map((item: any) => ({
+                        items: (Array.isArray(ord.items) ? ord.items : []).map((item: CartItem) => ({
                             ...item,
                             name: item.name || 'Unknown Item',
                             price: typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0,
@@ -211,8 +214,8 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }));
                     setOrders(safeOrders);
                 }
-            } catch (e) {
-                console.error("Polling error", e);
+            } catch {
+                console.error("Polling error");
             }
         };
         fetchOrders();
@@ -231,8 +234,8 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  const navigateTo = useCallback((page: Page, state?: any) => {
-    if (state && state.category) {
+  const navigateTo = useCallback((page: Page, state?: Record<string, unknown>) => {
+    if (state && typeof state.category === 'string') {
         sessionStorage.setItem('arobazzar_active_category', state.category);
     }
     
@@ -328,7 +331,7 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await db.saveProduct(safeProduct);
       notify('Product saved successfully', 'success');
-    } catch (e) {
+    } catch {
       notify('Saved locally. Connect to network to sync.', 'info');
     }
   };
@@ -385,7 +388,7 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
            }
         }
         notify("Order placed successfully!", "success");
-    } catch (e) {
+    } catch {
         notify("Order saved locally. Will sync when online.", "info");
     }
   };
@@ -444,6 +447,7 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useShop = () => {
   const context = useContext(ShopContext);
   if (context === undefined) {

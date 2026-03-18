@@ -1,5 +1,6 @@
 
-import { BrowserProvider, parseEther, parseUnits, Contract, toUtf8Bytes, hexlify } from 'ethers';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { BrowserProvider, parseEther, parseUnits, Contract } from 'ethers';
 
 // Base Mainnet Params
 const BASE_CHAIN_ID = '0x2105'; // 8453 in hex
@@ -30,12 +31,6 @@ const ERC20_ABI = [
 
 const POLICY_TEXT = "Payment to Arobazzar.lk";
 
-declare global {
-    interface Window {
-        ethereum?: any;
-    }
-}
-
 // Check what wallets are available
 export const getAvailableWallets = () => {
     const eth = window.ethereum;
@@ -55,24 +50,24 @@ export const connectWallet = async (type: 'METAMASK' | 'COINBASE' | 'INJECTED' =
     }
 
     // Handle multiple injected providers (EIP-6963 style manual check)
-    if (providerToUse.providers) {
+    if (providerToUse && (providerToUse as any).providers) {
         if (type === 'METAMASK') {
-            providerToUse = providerToUse.providers.find((p: any) => p.isMetaMask) || providerToUse;
+            providerToUse = (providerToUse as any).providers.find((p: any) => p.isMetaMask) || providerToUse;
         } else if (type === 'COINBASE') {
-            providerToUse = providerToUse.providers.find((p: any) => p.isCoinbaseWallet) || providerToUse;
+            providerToUse = (providerToUse as any).providers.find((p: any) => p.isCoinbaseWallet) || providerToUse;
         }
     }
 
     try {
-        const provider = new BrowserProvider(providerToUse);
+        const provider = new BrowserProvider(providerToUse as any);
         const accounts = await provider.send("eth_requestAccounts", []);
         
         // Switch to Base Chain
         try {
             await provider.send('wallet_switchEthereumChain', [{ chainId: BASE_CHAIN_ID }]);
-        } catch (switchError: any) {
+        } catch (switchError) {
             // Chain not added error
-            if (switchError.code === 4902) {
+            if ((switchError as { code: number }).code === 4902) {
                 await provider.send('wallet_addEthereumChain', [{
                     chainId: BASE_CHAIN_ID,
                     chainName: 'Base Mainnet',
@@ -108,7 +103,7 @@ export const getConversionRate = async (type: 'ETH' | 'USD'): Promise<number> =>
 
 export const sendNativePayment = async (contractAddress: string, amountLKR: number, orderId: string): Promise<string> => {
     if (!window.ethereum) throw new Error("No Wallet");
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(window.ethereum as any);
     const signer = await provider.getSigner();
 
     const rate = await getConversionRate('ETH');
@@ -127,7 +122,7 @@ export const sendNativePayment = async (contractAddress: string, amountLKR: numb
             const tx = await contract.payETH(orderId, POLICY_TEXT, { value: amountWei });
             await tx.wait();
             return tx.hash;
-        } catch (err: any) {
+        } catch (err) {
              console.warn("Smart contract call failed", err);
              throw err;
         }
@@ -146,7 +141,7 @@ export const sendNativePayment = async (contractAddress: string, amountLKR: numb
 
 export const sendTokenPayment = async (tokenAddress: string, contractAddress: string, amountLKR: number, orderId: string): Promise<string> => {
     if (!window.ethereum) throw new Error("No Wallet");
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(window.ethereum as any);
     const signer = await provider.getSigner();
     const userAddress = await signer.getAddress();
     

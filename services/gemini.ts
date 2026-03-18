@@ -1,8 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let ai: GoogleGenAI | null = null;
+try {
+  if (process.env.API_KEY) {
+    ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  }
+} catch {
+  console.warn("Gemini API Key not set or invalid.");
+}
 
 export const generateProductDescription = async (name: string, category: string, features: string): Promise<string> => {
+  if (!ai) return "A high-quality product. (Gemini API key missing)";
   try {
     const prompt = `Write a compelling, marketing-focused product description for an e-commerce store.
     Product Name: ${name}
@@ -26,6 +34,7 @@ export const generateProductDescription = async (name: string, category: string,
 
 export const analyzeReviews = async (reviews: string[]): Promise<string> => {
     if (reviews.length === 0) return "No reviews to analyze.";
+    if (!ai) return "Cannot analyze reviews. (Gemini API key missing)";
 
     try {
         const prompt = `Here are some customer reviews for a product:
@@ -39,7 +48,7 @@ export const analyzeReviews = async (reviews: string[]): Promise<string> => {
             contents: prompt,
         });
         return response.text || "Analysis failed.";
-    } catch (error) {
+    } catch {
         return "Error analyzing reviews.";
     }
 };

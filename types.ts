@@ -106,6 +106,8 @@ export interface PaymentGatewayConfig {
   instructions?: string;
 }
 
+export type PaymentGateway = PaymentGatewayConfig;
+
 // Banner Linking Types
 export type LinkType = 'NONE' | 'PRODUCT' | 'CATEGORY';
 
@@ -196,7 +198,23 @@ export interface Notification {
 }
 
 declare global {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   interface Window {
-    payhere: any;
+    ethereum?: {
+      isMetaMask?: boolean;
+      isCoinbaseWallet?: boolean;
+      providers?: any[];
+      request: (args: { method: string; params?: any[] }) => Promise<any>;
+      send?: (method: string, params?: any[]) => Promise<any>;
+      on: (event: string, callback: (...args: any[]) => void) => void;
+      removeListener: (event: string, callback: (...args: any[]) => void) => void;
+    };
+    payhere: {
+      onCompleted: (orderId: string) => void;
+      onDismissed: () => void;
+      onError: (error: string) => void;
+      startPayment: (payment: any) => void;
+    };
   }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }

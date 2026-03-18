@@ -1,7 +1,7 @@
 
 import React, { useEffect, useLayoutEffect, Suspense, lazy, useState } from 'react';
 import { ShopProvider, useShop } from './context/ShopContext';
-import { Loader2, AlertCircle, CheckCircle, Info, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
 
 // Lazy load components to reduce initial bundle size
 const StoreFront = lazy(() => import('./components/StoreFront').then(module => ({ default: module.StoreFront })));
@@ -52,7 +52,7 @@ const HeadManager: React.FC = () => {
                         targetIcon = parsed.siteFavicon;
                     }
                 }
-            } catch (e) {}
+            } catch { /* ignore */ }
         }
 
         const oldLink = document.getElementById('dynamic-favicon');

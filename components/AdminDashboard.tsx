@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useShop } from '../context/ShopContext';
-import { Product, OrderStatus, SiteSettings, PaymentMethod, Order, DiscountCode, Review, LinkType, Category } from '../types';
+import { Product, OrderStatus, SiteSettings, PaymentMethod, Order, DiscountCode, LinkType } from '../types';
 import { generateProductDescription } from '../services/gemini';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Plus, Trash2, Edit, Package, BarChart2, DollarSign, Loader2, Sparkles, Box, ListOrdered, Search, LogOut, Settings, Save, Star, User, RefreshCw, UploadCloud, Menu, X, ArrowRight, CreditCard, Banknote, Wallet, Layers, Eye, MapPin, Phone, Mail, Ticket, LayoutDashboard, Clock, LayoutGrid, Watch, Shirt, FileText, MessageSquare, CheckSquare, Square, ChevronRight, FolderTree, Link as LinkIcon, Landmark } from 'lucide-react';
+import { Plus, Trash2, Edit, Package, BarChart2, DollarSign, Loader2, Sparkles, Box, ListOrdered, Search, LogOut, Settings, Save, RefreshCw, UploadCloud, X, Banknote, Wallet, Eye, Ticket, LayoutDashboard, Clock, FolderTree, Link as LinkIcon, Landmark, Star, Mail, Phone, MapPin, MessageSquare, ArrowRight } from 'lucide-react';
 import * as db from '../services/db';
 import { uploadToLocal, uploadToPinata } from '../services/ipfs';
 
@@ -37,8 +37,8 @@ const ImageUploader: React.FC<{
             const url = method === 'local' ? await uploadToLocal(file) : await uploadToPinata(file);
             onChange(url);
             notify(`Image uploaded to ${method === 'local' ? 'Local Storage' : 'IPFS'}!`, "success");
-        } catch (error: any) {
-            notify("Upload failed: " + error.message, "error");
+        } catch (error) {
+            notify("Upload failed: " + (error as Error).message, "error");
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -380,8 +380,8 @@ const ProductManager: React.FC = () => {
             const newImages = [...currentImages, url];
             setImageInput(newImages.join(', '));
             notify(`Image uploaded to ${method === 'local' ? 'Local Storage' : 'IPFS'}!`, "success");
-        } catch (error: any) {
-            notify(error.message || "Upload failed", "error");
+        } catch (error) {
+            notify((error as Error).message || "Upload failed", "error");
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -762,11 +762,6 @@ const OrderManager: React.FC = () => {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     
     const filteredOrders = orders.filter(o => {
-        // Hide PENDING and CANCELLED orders for automated payment gateways
-        const isAutomatedGateway = [PaymentMethod.PAYHERE, PaymentMethod.PAYPAL, PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(o.paymentMethod);
-        if (isAutomatedGateway && (o.status === OrderStatus.PENDING || o.status === 'CANCELLED' as any)) {
-            return false;
-        }
         return o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                o.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                o.customerEmail.toLowerCase().includes(searchTerm.toLowerCase());
@@ -973,7 +968,7 @@ const SettingsManager: React.FC = () => {
         if (localSettings) updateSiteSettings(localSettings);
     };
 
-    const updateField = (field: keyof SiteSettings, value: any) => {
+    const updateField = <K extends keyof SiteSettings>(field: K, value: SiteSettings[K]) => {
         setLocalSettings(prev => prev ? ({ ...prev, [field]: value }) : null);
     };
 
@@ -1321,13 +1316,13 @@ const SettingsManager: React.FC = () => {
                     <h4 className="font-bold text-lg border-b pb-2">Banners</h4>
                     <div className="bg-gray-50 p-6 rounded-xl">
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Middle Banner Title</label>
-                        <input className="w-full bg-white p-3 rounded-lg border-2 border-transparent focus:border-black outline-none mb-4" value={localSettings.middleBanner?.title || ''} onChange={(e) => updateField('middleBanner', { ...localSettings.middleBanner, title: e.target.value })} />
-                         <ImageUploader label="Middle Banner Image" value={localSettings.middleBanner?.image || ''} onChange={(v) => updateField('middleBanner', { ...localSettings.middleBanner, image: v })} />
+                        <input className="w-full bg-white p-3 rounded-lg border-2 border-transparent focus:border-black outline-none mb-4" value={localSettings.middleBanner?.title || ''} onChange={(e) => updateField('middleBanner', { title: e.target.value, image: localSettings.middleBanner?.image ?? '', subtitle: localSettings.middleBanner?.subtitle ?? '', linkType: localSettings.middleBanner?.linkType, linkValue: localSettings.middleBanner?.linkValue })} />
+                         <ImageUploader label="Middle Banner Image" value={localSettings.middleBanner?.image || ''} onChange={(v) => updateField('middleBanner', { image: v, title: localSettings.middleBanner?.title ?? '', subtitle: localSettings.middleBanner?.subtitle ?? '', linkType: localSettings.middleBanner?.linkType, linkValue: localSettings.middleBanner?.linkValue })} />
                          <LinkInput 
                             linkType={localSettings.middleBanner?.linkType || 'NONE'}
                             linkValue={localSettings.middleBanner?.linkValue || ''}
-                            onTypeChange={(t) => updateField('middleBanner', { ...localSettings.middleBanner, linkType: t })}
-                            onValueChange={(v) => updateField('middleBanner', { ...localSettings.middleBanner, linkValue: v })}
+                            onTypeChange={(t) => updateField('middleBanner', { linkType: t, title: localSettings.middleBanner?.title ?? '', image: localSettings.middleBanner?.image ?? '', subtitle: localSettings.middleBanner?.subtitle ?? '', linkValue: localSettings.middleBanner?.linkValue })}
+                            onValueChange={(v) => updateField('middleBanner', { linkValue: v, title: localSettings.middleBanner?.title ?? '', image: localSettings.middleBanner?.image ?? '', subtitle: localSettings.middleBanner?.subtitle ?? '', linkType: localSettings.middleBanner?.linkType })}
                          />
                     </div>
                 </section>

@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useShop } from '../context/ShopContext';
+import { useShop, Page } from '../context/ShopContext';
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
-import { Product, PaymentMethod, OrderStatus, Review, PaymentGatewayConfig, LinkType, HeroBanner } from '../types';
+import { Product, PaymentMethod, OrderStatus, LinkType, HeroBanner, Order } from '../types';
 import * as db from '../services/db';
 import * as web3 from '../services/web3';
 import { uploadToLocal } from '../services/ipfs';
 import md5 from 'crypto-js/md5';
-import { ShoppingBag, Star, X, Plus, Minus, CreditCard, Banknote, Bitcoin, Truck, Heart, ArrowRight, Search, Menu, Instagram, Twitter, Facebook, Lock, AlertCircle, CheckCircle, User, Key, QrCode, Wallet, Smartphone, Phone, Zap, Monitor, Maximize2, ZoomIn, Send, Package, Landmark, Watch, LayoutGrid, Layers, Shirt, Ticket, Mail, MapPin, Loader2, UploadCloud, Trash2 } from 'lucide-react';
+import { ShoppingBag, Star, X, Plus, Minus, CreditCard, Banknote, Truck, Heart, ArrowRight, Search, Menu, Lock, AlertCircle, CheckCircle, User, Wallet, Phone, Zap, Maximize2, Send, Landmark, Mail, MapPin, Loader2, UploadCloud, Trash2 } from 'lucide-react';
 
 // --- SEO Helper ---
 const SeoManager: React.FC<{ title: string; description?: string }> = ({ title, description }) => {
@@ -312,7 +312,7 @@ const UserProfile: React.FC = () => {
     const { userOrderIds, orders, navigateTo, settings } = useShop();
     const [lookupId, setLookupId] = useState('');
     const [lookupEmail, setLookupEmail] = useState('');
-    const [foundOrder, setFoundOrder] = useState<any>(null);
+    const [foundOrder, setFoundOrder] = useState<Order | null | 'NOT_FOUND'>(null);
     const myOrders = orders.filter(o => userOrderIds.includes(o.id));
     const handleLookup = (e: React.FormEvent) => {
         e.preventDefault();
@@ -480,7 +480,9 @@ const ReviewForm: React.FC<{ productId: string; onReviewAdded: () => void }> = (
         try {
             await addReview(productId, { id: Date.now().toString(), user: name, rating, comment, date: new Date().toISOString().split('T')[0] });
             setName(''); setComment(''); setRating(5); onReviewAdded();
-        } catch (e) { } finally { setIsSubmitting(false); }
+        } catch { 
+            // Error handled by finally block or ignored
+        } finally { setIsSubmitting(false); }
     };
     return (
         <form onSubmit={handleSubmit} className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-4">
@@ -508,7 +510,7 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
   const [zoomImgLoaded, setZoomImgLoaded] = useState(false); 
 
   // FIX: Moved useMemo before the conditional return to satisfy React Hook rules
-  const images = useMemo(() => (product && product.images && product.images.length > 0) ? product.images : [PLACEHOLDER_IMG], [product?.images]);
+  const images = useMemo(() => (product && product.images && product.images.length > 0) ? product.images : [PLACEHOLDER_IMG], [product]);
 
   useEffect(() => {
     if (product) {
@@ -562,11 +564,10 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
                                     setImgLoaded(true);
                                 }
                             }} 
-                            className={`w-full h-full object-cover transition-all duration-500 ease-out transform-gpu bg-gray-50 relative z-10 ${imgLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+                            className={`w-full h-full object-cover transition-all duration-500 ease-out transform-gpu bg-gray-50 relative z-10`}
                             referrerPolicy="no-referrer" 
                             alt={product.name} 
                             loading="eager" 
-                            fetchPriority="high" 
                             decoding="async"
                         />
                         <div className="absolute top-6 right-6 bg-black/5 p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm transform translate-y-2 group-hover:translate-y-0 z-20 hidden md:block"><Maximize2 size={24} className="text-black"/></div>
@@ -693,7 +694,7 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
                             target.src = activeImageSrc;
                         }
                     }}
-                    className={`max-w-[95vw] max-h-[95vh] w-full h-full object-contain drop-shadow-2xl relative z-10 transition-opacity duration-500 ${zoomImgLoaded ? 'opacity-100' : 'opacity-0'}`} 
+                    className={`max-w-[95vw] max-h-[95vh] w-full h-full object-contain drop-shadow-2xl relative z-10 transition-opacity duration-500`} 
                     alt="Zoomed Product" 
                     referrerPolicy="no-referrer" 
                     loading="eager"
@@ -720,14 +721,14 @@ const WalletSelectionModal: React.FC<{ onClose: () => void; onSelect: (type: 'ME
     );
 };
 
-const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { cart, clearCart, addOrder, notify, settings, validateDiscount } = useShop();
+const CheckoutPage: React.FC = () => {
+    const { cart, clearCart, addOrder, notify, settings, validateDiscount, navigateTo } = useShop();
     const [step, setStep] = useState<'details' | 'payment'>('details');
     const [formData, setFormData] = useState(() => {
         try {
             const local = localStorage.getItem('arobazzar_customer');
             return local ? JSON.parse(local) : { name: '', email: '', phone: '', address: '' };
-        } catch (e) { return { name: '', email: '', phone: '', address: '' }; }
+        } catch { return { name: '', email: '', phone: '', address: '' }; }
     });
 
     useEffect(() => {
@@ -746,12 +747,7 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [exchangeRate, setExchangeRate] = useState<number>(0);
     const [convertedAmount, setConvertedAmount] = useState<number>(0);
 
-    const availableMethods = settings?.paymentGateways?.filter(g => g.enabled) || [];
-
-    useEffect(() => {
-        document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = ''; };
-    }, []);
+    const availableMethods = useMemo(() => settings?.paymentGateways?.filter(g => g.enabled) || [], [settings?.paymentGateways]);
 
     useEffect(() => {
         if (availableMethods.length > 0 && !paymentMethod) {
@@ -783,7 +779,7 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     const rate = await web3.getConversionRate(type);
                     setExchangeRate(rate);
                     setConvertedAmount(finalTotal * rate);
-                } catch(e) { }
+                } catch { /* ignore */ }
             };
             fetchRate();
         }
@@ -831,30 +827,6 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         const hashString = payhereConfig.payhereMerchantId + orderId + amountFormatted + "LKR" + merchantSecretHash;
         const hash = md5(hashString).toString().toUpperCase();
 
-        // Create the order as PENDING before starting payment
-        try {
-            await addOrder({
-                id: orderId,
-                customerName: formData.name,
-                customerEmail: formData.email,
-                contactNumber: formData.phone,
-                address: formData.address,
-                items: [...cart],
-                total: finalTotal,
-                subtotal: subTotal,
-                deliveryCharge: deliveryCharge,
-                status: OrderStatus.PENDING,
-                paymentMethod: PaymentMethod.PAYHERE,
-                date: new Date().toISOString().split('T')[0],
-                discountCode: discountApplied?.code,
-                discountApplied: discountApplied?.amount
-            }, discountApplied?.code);
-        } catch (error: any) {
-            notify("Failed to initialize order: " + error.message, "error");
-            setIsProcessing(false);
-            return;
-        }
-
         const payment = {
             "sandbox": payhereConfig.payhereEnv === 'sandbox',
             "merchant_id": payhereConfig.payhereMerchantId,
@@ -876,11 +848,33 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         };
 
         if (window.payhere) {
-            window.payhere.onCompleted = function onCompleted(completedOrderId: string) {
+            window.payhere.onCompleted = async function onCompleted(completedOrderId: string) {
                 setTransactionRef(completedOrderId);
-                clearCart();
-                setIsSuccess(true);
-                setIsProcessing(false);
+                try {
+                    await addOrder({
+                        id: orderId,
+                        customerName: formData.name,
+                        customerEmail: formData.email,
+                        contactNumber: formData.phone,
+                        address: formData.address,
+                        items: [...cart],
+                        total: finalTotal,
+                        subtotal: subTotal,
+                        deliveryCharge: deliveryCharge,
+                        status: OrderStatus.PROCESSING,
+                        paymentMethod: PaymentMethod.PAYHERE,
+                        transactionHash: completedOrderId,
+                        date: new Date().toISOString().split('T')[0],
+                        discountCode: discountApplied?.code,
+                        discountApplied: discountApplied?.amount
+                    }, discountApplied?.code);
+                    clearCart();
+                    setIsSuccess(true);
+                } catch (error) {
+                    notify("Failed to create order: " + (error as Error).message, "error");
+                } finally {
+                    setIsProcessing(false);
+                }
             };
 
             window.payhere.onDismissed = function onDismissed() {
@@ -888,7 +882,7 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 setIsProcessing(false);
             };
 
-            window.payhere.onError = function onError(error: any) {
+            window.payhere.onError = function onError(error: unknown) {
                 notify("Payment error: " + error, "error");
                 setIsProcessing(false);
             };
@@ -928,18 +922,18 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             
             await addOrder({ id: tempOrderId, customerName: formData.name, customerEmail: formData.email, contactNumber: formData.phone, address: formData.address, items: [...cart], total: finalTotal, subtotal: subTotal, deliveryCharge: deliveryCharge, status: initialStatus, paymentMethod, transactionHash: txHash, date: new Date().toISOString().split('T')[0], discountCode: discountApplied?.code, discountApplied: discountApplied?.amount }, discountApplied?.code);
             clearCart(); setIsSuccess(true);
-        } catch (error: any) { notify(error.message || "Payment Failed", "error"); } finally { setIsProcessing(false); }
+        } catch (error) { notify((error as Error).message || "Payment Failed", "error"); } finally { setIsProcessing(false); }
     };
 
     if (isSuccess) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-fade-in" role="dialog" aria-label="Order Confirmed">
-                <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-sm:max-w-sm w-full text-center relative overflow-hidden">
+            <div className="flex-1 flex items-center justify-center p-4 animate-fade-in" role="dialog" aria-label="Order Confirmed">
+                <div className="bg-white p-12 rounded-[3rem] shadow-sm border border-gray-100 max-sm:max-w-sm w-full text-center relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
                     <div className="w-24 h-24 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-8 animate-scale-in"><CheckCircle size={48} /></div>
                     <h3 className="text-3xl font-display font-black mb-4 uppercase">Order Confirmed!</h3>
                     <p className="text-gray-500 mb-8 font-medium">Thank you for shopping with Arobazzar.</p>
-                    <Button onClick={onClose} className="w-full">Back to Store</Button>
+                    <Button onClick={() => navigateTo('HOME')} className="w-full">Back to Store</Button>
                 </div>
             </div>
         );
@@ -951,13 +945,12 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     return (
         <PayPalScriptProvider options={{ "clientId": paypalClientId || "sb", currency: "USD", intent: "capture" }}>
             {showWalletSelector && <WalletSelectionModal onClose={() => setShowWalletSelector(false)} onSelect={handleWalletSelect} />}
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-2 md:p-6 animate-fade-in overscroll-none" onClick={onClose} role="dialog" aria-modal="true" aria-label="Checkout">
-                <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95dvh] md:max-h-[90vh] h-auto" onClick={e => e.stopPropagation()}>
+            <div className="max-w-3xl mx-auto p-4 md:p-8 animate-fade-in">
+                <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] w-full overflow-hidden shadow-sm border border-gray-100 flex flex-col">
                     <div className="p-4 md:p-8 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
                         <h2 className="text-lg md:text-2xl font-display font-black uppercase tracking-tight">Checkout</h2>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="Close Checkout"><X size={24} /></button>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/50 overscroll-contain">
+                    <div className="flex-1 p-4 md:p-8 bg-gray-50/50">
                         {step === 'details' ? (
                             <div className="space-y-6">
                                 <div className="space-y-4">
@@ -1028,16 +1021,16 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                             </div>
                                         )}
 
-                                        {/* Crypto */}
-                                        {availableMethods.some(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as any)) && (
+                                        {/* Other Methods */}
+                                        {availableMethods.some(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD) && (
                                             <div className="space-y-3">
-                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Crypto (Base Chain)</h4>
-                                                {availableMethods.filter(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as any)).map(m => { 
+                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Other Methods</h4>
+                                                {availableMethods.filter(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD).sort((a) => a.id === PaymentMethod.COD ? -1 : 1).map(m => { 
                                                     const isSelected = paymentMethod === m.id; 
                                                     return (
                                                         <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
-                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600 text-white`}>
-                                                                <Zap size={24}/>
+                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${m.id === PaymentMethod.COD ? 'bg-black text-white' : 'bg-indigo-600 text-white'}`}>
+                                                                {m.id === PaymentMethod.COD ? <Banknote size={24}/> : <Landmark size={24}/>}
                                                             </div>
                                                             <div>
                                                                 <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
@@ -1049,16 +1042,16 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                             </div>
                                         )}
 
-                                        {/* Other Methods */}
-                                        {availableMethods.some(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD) && (
+                                        {/* Crypto */}
+                                        {availableMethods.some(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as PaymentMethod)) && (
                                             <div className="space-y-3">
-                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Other Methods</h4>
-                                                {availableMethods.filter(m => m.id === PaymentMethod.BANK_DEPOSIT || m.id === PaymentMethod.COD).map(m => { 
+                                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Crypto (Base Chain)</h4>
+                                                {availableMethods.filter(m => [PaymentMethod.BASE_ETH, PaymentMethod.BASE_USDC, PaymentMethod.BASE_USDT].includes(m.id as PaymentMethod)).map(m => { 
                                                     const isSelected = paymentMethod === m.id; 
                                                     return (
                                                         <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-blue-600 bg-blue-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
-                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${m.id === PaymentMethod.COD ? 'bg-black text-white' : 'bg-indigo-600 text-white'}`}>
-                                                                {m.id === PaymentMethod.COD ? <Banknote size={24}/> : <Landmark size={24}/>}
+                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600 text-white`}>
+                                                                <Zap size={24}/>
                                                             </div>
                                                             <div>
                                                                 <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
@@ -1099,8 +1092,8 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                                             const url = await uploadToLocal(file);
                                                             setSlipUrl(url);
                                                             notify("Slip uploaded successfully!", "success");
-                                                        } catch (err: any) {
-                                                            notify("Failed to upload slip: " + err.message, "error");
+                                                        } catch (err) {
+                                                            notify("Failed to upload slip: " + (err as Error).message, "error");
                                                         } finally {
                                                             setIsUploadingSlip(false);
                                                         }
@@ -1159,7 +1152,7 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                                         const details = await actions.order.capture();
                                                         setTransactionRef(details.id || 'PAYPAL_TX');
                                                         await handlePlaceOrder();
-                                                    } catch (err) {
+                                                    } catch {
                                                         notify("Payment capture failed. Please try again.", "error");
                                                     }
                                                }
@@ -1193,7 +1186,7 @@ const CheckoutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-const useBannerClick = (onProductClick: (p: Product) => void, navigateTo: (page: any) => void) => {
+const useBannerClick = (onProductClick: (p: Product) => void, navigateTo: (page: Page, state?: Record<string, unknown>) => void) => {
     const { products } = useShop();
     return (linkType?: LinkType, linkValue?: string) => {
         if (!linkType || linkType === 'NONE' || !linkValue) return;
@@ -1274,7 +1267,6 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                                 }} 
                                 referrerPolicy="no-referrer" 
                                 loading="eager" 
-                                fetchPriority="high" 
                                 decoding="async"
                             />
                         </div>
@@ -1528,7 +1520,6 @@ export const StoreFront: React.FC = () => {
   const { cart, removeFromCart, updateCartQuantity, navigateTo, currentPage, settings } = useShop();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -1546,7 +1537,7 @@ export const StoreFront: React.FC = () => {
   if (currentPage === 'PROFILE') return <UserProfile />;
   if (currentPage === 'CONTACT') return <ContactPage />;
 
-  const handleMobileNav = (page: any) => { navigateTo(page); setIsMobileMenuOpen(false); };
+  const handleMobileNav = (page: Page) => { navigateTo(page); setIsMobileMenuOpen(false); };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -1583,6 +1574,7 @@ export const StoreFront: React.FC = () => {
           {currentPage === 'HOME' && <HomePage onProductClick={setSelectedProduct} />}
           {currentPage === 'SHOP' && <ShopPage onProductClick={setSelectedProduct} />}
           {currentPage === 'TRENDING' && <TrendingPage onProductClick={setSelectedProduct} />}
+          {currentPage === 'CHECKOUT' && <CheckoutPage />}
       </main>
 
       <Footer />
@@ -1609,13 +1601,12 @@ export const StoreFront: React.FC = () => {
             </div>
             <div className="p-8 border-t border-gray-100 bg-gray-50">
                 <div className="flex justify-between mb-8 text-3xl font-display font-black tracking-tight mt-4"><span>Total</span><span>LKR {cart.reduce((a, b) => a + ((b.discountPrice && b.discountPrice < b.price ? b.discountPrice : b.price) * b.quantity), 0).toFixed(2)}</span></div>
-                <Button onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} className="w-full text-lg py-5" disabled={cart.length === 0}>Checkout <ArrowRight size={20} /></Button>
+                <Button onClick={() => { setIsCartOpen(false); navigateTo('CHECKOUT'); }} className="w-full text-lg py-5" disabled={cart.length === 0}>Checkout <ArrowRight size={20} /></Button>
             </div>
         </div>
       </div>
 
       <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
-      {isCheckoutOpen && <CheckoutModal onClose={() => setIsCheckoutOpen(false)} />}
     </div>
   );
 };

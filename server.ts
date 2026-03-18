@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
+import { MongoClient, ObjectId, ServerApiVersion, Db } from "mongodb";
 import nodemailer from "nodemailer";
 import multer from "multer";
 import path from "path";
@@ -10,6 +10,7 @@ import fs from "fs";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
+import { Order, CartItem, PaymentGateway, PaymentMethod, OrderStatus } from "./types";
 
 dotenv.config();
 
@@ -35,7 +36,7 @@ app.use('/api/', apiLimiter);
 
 // --- MONGODB CONNECTION ---
 let cachedClient: MongoClient | null = null;
-let cachedDb: any = null;
+let cachedDb: Db | null = null;
 
 async function connectToDatabase() {
   if (cachedDb) return cachedDb;
@@ -114,8 +115,8 @@ const generateEmailTemplate = (title: string, content: string) => {
     `;
 };
 
-const generateOrderHtml = (order: any, isAdmin = false) => {
-  const itemsRows = order.items.map((item: any) => `
+const generateOrderHtml = (order: Order, isAdmin = false) => {
+  const itemsRows = order.items.map((item: CartItem) => `
     <tr>
       <td>
         <div style="font-weight: bold;">${item.name}</div>
@@ -178,7 +179,7 @@ const generateOrderHtml = (order: any, isAdmin = false) => {
   return generateEmailTemplate(isAdmin ? 'New Order Received' : 'Order Confirmed', content);
 };
 
-const generateStatusHtml = (order: any) => {
+const generateStatusHtml = (order: Order) => {
   const content = `
       <p>Hi ${order.customerName},</p>
       <p>The status of your order <strong>#${order.id}</strong> has been updated.</p>
@@ -242,8 +243,8 @@ async function startServer() {
   });
 
   const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-      // Allow GET requests and POST to /orders (for customers placing orders)
-      if (req.method === 'GET' || (req.method === 'POST' && req.params.collection === 'orders')) {
+      // Allow GET, OPTIONS requests and POST to /orders (for customers placing orders)
+      if (req.method === 'GET' || req.method === 'OPTIONS' || (req.method === 'POST' && req.params.collection === 'orders')) {
           return next();
       }
       
@@ -293,7 +294,7 @@ async function startServer() {
           if (!db) return res.status(500).json({ error: "Database connection failed" });
 
           const settings = await db.collection("settings").findOne({ id: "global_settings" });
-          const payhereConfig = settings?.paymentGateways?.find((g: any) => g.id === "PAYHERE");
+          const payhereConfig = settings?.paymentGateways?.find((g: PaymentGateway) => g.id === PaymentMethod.PAYHERE);
           const payhereSecret = payhereConfig?.payhereSecret;
 
           if (payhereSecret) {
@@ -303,14 +304,14 @@ async function startServer() {
 
               if (generatedSig === md5sig) {
                   const ordersCollection = db.collection("orders");
-                  const order = await ordersCollection.findOne({ id: order_id });
+                  const order = await ordersCollection.findOne({ id: order_id }) as unknown as Order | null;
                   
                   if (order) {
                       let newStatus = order.status;
                       if (status_code === "2") {
-                          newStatus = "PROCESSING"; // Successful payment
+                          newStatus = OrderStatus.PROCESSING; // Successful payment
                       } else if (parseInt(status_code) < 0) {
-                          newStatus = "CANCELLED"; // Failed or cancelled payment
+                          newStatus = OrderStatus.CANCELLED; // Failed or cancelled payment
                       }
 
                       if (newStatus !== order.status) {
@@ -331,17 +332,18 @@ async function startServer() {
       }
   });
 
-  app.all('/api/:collection/:id?', requireAuth, async (req, res) => {
+  app.all(['/api/:collection', '/api/:collection/:id'], requireAuth, async (req, res) => {
     if (!process.env.MONGODB_URI) {
       return res.status(200).json({ useFallback: true });
     }
 
     try {
       const db = await connectToDatabase();
+      if (!db) return res.status(500).json({ error: "Database connection failed" });
       const collectionName = req.params.collection;
-      const id = (req.params as any).id || (req.params as any)['id?'];
+      const id = req.params.id as string;
 
-      const collection = db.collection(collectionName);
+      const collection = db.collection(collectionName as string);
 
       // GET
       if (req.method === "GET") {
@@ -400,9 +402,9 @@ async function startServer() {
 
       return res.status(405).json({ error: "Method not supported" });
 
-    } catch (error: any) {
+    } catch (error) {
       console.error("API Error:", error);
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: (error as Error).message });
     }
   });
 

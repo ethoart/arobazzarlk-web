@@ -1,4 +1,3 @@
-import { Notification } from '../types';
 
 // High-performance IPFS gateways for redundancy and speed.
 // Pinata is prioritized for files hosted on their platform.
@@ -21,7 +20,7 @@ export const uploadToLocal = async (file: File): Promise<string> => {
     formData.append('image', file);
 
     try {
-        const API_URL = (import.meta as any).env.VITE_API_URL || '/api';
+        const API_URL = (import.meta as unknown as { env: Record<string, string> }).env.VITE_API_URL || '/api';
         const res = await fetch(`${API_URL}/upload`, {
             method: 'POST',
             body: formData,
@@ -50,7 +49,7 @@ export const uploadToPinata = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const pinataJWT = (import.meta as any).env.VITE_PINATA_JWT;
+    const pinataJWT = (import.meta as unknown as { env: Record<string, string> }).env.VITE_PINATA_JWT;
     if (!pinataJWT) {
         throw new Error("VITE_PINATA_JWT is not configured in environment variables.");
     }

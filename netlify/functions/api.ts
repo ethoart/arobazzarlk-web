@@ -1,11 +1,12 @@
 
-import { Context } from "@netlify/functions";
-import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
+
+import { MongoClient, ObjectId, ServerApiVersion, Db } from "mongodb";
 import nodemailer from "nodemailer";
+import { Order, CartItem, Product, Category, PaymentGateway, PaymentMethod, OrderStatus } from "../../types";
 
 // Cache the database connection
 let cachedClient: MongoClient | null = null;
-let cachedDb: any = null;
+let cachedDb: Db | null = null;
 
 async function connectToDatabase() {
   if (cachedDb) return cachedDb;
@@ -94,8 +95,8 @@ const generateEmailTemplate = (title: string, content: string) => {
     `;
 };
 
-const generateOrderHtml = (order: any, isAdmin = false) => {
-  const itemsRows = order.items.map((item: any) => `
+const generateOrderHtml = (order: Order, isAdmin = false) => {
+  const itemsRows = order.items.map((item: CartItem) => `
     <tr>
       <td>
         <div style="font-weight: bold;">${item.name}</div>
@@ -158,7 +159,7 @@ const generateOrderHtml = (order: any, isAdmin = false) => {
   return generateEmailTemplate(isAdmin ? 'New Order Received' : 'Order Confirmed', content);
 };
 
-const generateStatusHtml = (order: any) => {
+const generateStatusHtml = (order: Order) => {
   const content = `
       <p>Hi ${order.customerName},</p>
       <p>The status of your order <strong>#${order.id}</strong> has been updated.</p>
@@ -203,10 +204,10 @@ const sendEmail = async (to: string, subject: string, html: string) => {
 };
 
 // --- SITEMAP GENERATOR ---
-const generateSitemap = async (db: any) => {
+const generateSitemap = async (db: Db) => {
     try {
-        const products = await db.collection('products').find({}).toArray();
-        const categories = await db.collection('categories').find({}).toArray();
+        const products = await db.collection('products').find({}).toArray() as unknown as Product[];
+        const categories = await db.collection('categories').find({}).toArray() as unknown as Category[];
         const baseUrl = 'https://arobazzar.lk';
 
         let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -215,24 +216,24 @@ const generateSitemap = async (db: any) => {
           <url><loc>${baseUrl}/#shop</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
           <url><loc>${baseUrl}/#trending</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`;
 
-        products.forEach((p: any) => {
+        products.forEach(() => {
             // <loc>${baseUrl}/product/${p.id}</loc>
         });
 
-        categories.forEach((c: any) => {
+        categories.forEach(() => {
             // <loc>${baseUrl}/category/${c.id}</loc>
         });
 
         xml += `</urlset>`;
         return xml;
-    } catch (e) {
+    } catch {
         return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`;
     }
 };
 
 // --- MAIN HANDLER ---
 
-export default async (req: Request, context: Context) => {
+export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: COMMON_HEADERS });
   }
@@ -243,7 +244,7 @@ export default async (req: Request, context: Context) => {
       if (!process.env.MONGODB_URI) return new Response("Database Error", { status: 500 });
       try {
         const db = await connectToDatabase();
-        const sitemap = await generateSitemap(db);
+        const sitemap = await generateSitemap(db as Db);
         return new Response(sitemap, {
             status: 200,
             headers: {
@@ -251,7 +252,7 @@ export default async (req: Request, context: Context) => {
                 "Cache-Control": "public, max-age=3600"
             }
         });
-      } catch (e) {
+      } catch {
         return new Response("Sitemap Error", { status: 500 });
       }
   }
@@ -262,6 +263,7 @@ export default async (req: Request, context: Context) => {
 
   try {
     const db = await connectToDatabase();
+    if (!db) return new Response(JSON.stringify({ error: "Database connection failed" }), { status: 500, headers: COMMON_HEADERS });
     const url = new URL(req.url);
     const pathParts = url.pathname.replace(/^\/?api\/?/, '').split('/').filter(Boolean);
     const collectionName = pathParts[0] || "products"; 
@@ -292,7 +294,7 @@ export default async (req: Request, context: Context) => {
       // We need the payhereSecret to verify the signature.
       // Since we don't have it in env vars (it's in the DB settings), we can fetch it from DB.
       const settings = await db.collection("settings").findOne({ id: "store_settings" });
-      const payhereConfig = settings?.paymentGateways?.find((g: any) => g.id === "PAYHERE");
+      const payhereConfig = settings?.paymentGateways?.find((g: PaymentGateway) => g.id === PaymentMethod.PAYHERE);
       const payhereSecret = payhereConfig?.payhereSecret;
 
       if (payhereSecret) {
@@ -302,15 +304,16 @@ export default async (req: Request, context: Context) => {
         const generatedSig = crypto.createHash('md5').update(hashString).digest('hex').toUpperCase();
 
         if (generatedSig === md5sig) {
+          if (!db) return new Response(JSON.stringify({ error: "Database connection failed" }), { status: 500, headers: COMMON_HEADERS });
           const ordersCollection = db.collection("orders");
-          const order = await ordersCollection.findOne({ id: order_id });
+          const order = await ordersCollection.findOne({ id: order_id }) as unknown as Order | null;
           
           if (order) {
             let newStatus = order.status;
             if (status_code === "2") {
-              newStatus = "PROCESSING"; // Successful payment
+              newStatus = OrderStatus.PROCESSING; // Successful payment
             } else if (parseInt(status_code) < 0) {
-              newStatus = "CANCELLED"; // Failed or cancelled payment
+              newStatus = OrderStatus.CANCELLED; // Failed or cancelled payment
             }
 
             if (newStatus !== order.status) {
@@ -375,8 +378,8 @@ export default async (req: Request, context: Context) => {
 
     return new Response(JSON.stringify({ error: "Method not supported" }), { status: 405, headers: COMMON_HEADERS });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("API Error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: COMMON_HEADERS });
+    return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: COMMON_HEADERS });
   }
 };
