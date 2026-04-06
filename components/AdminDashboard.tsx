@@ -995,6 +995,10 @@ const SettingsManager: React.FC = () => {
                         <ImageUploader label="Site Logo (Dark Mode)" value={localSettings.siteLogoDark || ''} onChange={(v) => updateField('siteLogoDark', v)} />
                         <ImageUploader label="Site Favicon" value={localSettings.siteFavicon || ''} onChange={(v) => updateField('siteFavicon', v)} />
                     </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <ImageUploader label="Koko Payment Logo" value={localSettings.kokoLogo || ''} onChange={(v) => updateField('kokoLogo', v)} />
+                        <ImageUploader label="PayHere Branding (Footer)" value={localSettings.payhereLogo || ''} onChange={(v) => updateField('payhereLogo', v)} />
+                    </div>
                 </section>
 
                 <section className="space-y-4">
@@ -1013,114 +1017,187 @@ const SettingsManager: React.FC = () => {
                 </section>
 
                 <section className="space-y-4">
-                    <h4 className="font-bold text-lg border-b pb-2">Hero Carousel (3 Banners)</h4>
-                    <p className="text-sm text-gray-500 mb-4">These banners rotate automatically on the home page.</p>
-                    <div className="space-y-8">
-                        {localSettings.heroBanners?.map((banner, index) => (
-                            <div key={index} className="bg-gray-50 p-6 rounded-2xl border border-gray-200 relative">
-                                <div className="absolute top-4 right-4 bg-black text-white text-xs font-bold px-2 py-1 rounded">
-                                    Slide {index + 1}
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Title</label>
-                                        <input 
-                                            className="w-full bg-white p-3 rounded-lg border-2 border-transparent focus:border-black outline-none" 
-                                            value={banner.title} 
-                                            onChange={(e) => {
-                                                const newBanners = [...(localSettings.heroBanners || [])];
-                                                newBanners[index] = { ...newBanners[index], title: e.target.value };
-                                                updateField('heroBanners', newBanners);
-                                            }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Subtitle</label>
-                                        <input 
-                                            className="w-full bg-white p-3 rounded-lg border-2 border-transparent focus:border-black outline-none" 
-                                            value={banner.subtitle} 
-                                            onChange={(e) => {
-                                                const newBanners = [...(localSettings.heroBanners || [])];
-                                                newBanners[index] = { ...newBanners[index], subtitle: e.target.value };
-                                                updateField('heroBanners', newBanners);
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="mb-4">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Background Color</label>
-                                    <div className="flex gap-2 items-center">
-                                         <input 
-                                            type="color"
-                                            className="h-10 w-10 rounded cursor-pointer border-0 p-0" 
-                                            value={banner.backgroundColor || '#000000'} 
-                                            onChange={(e) => {
-                                                const newBanners = [...(localSettings.heroBanners || [])];
-                                                newBanners[index] = { ...newBanners[index], backgroundColor: e.target.value };
-                                                updateField('heroBanners', newBanners);
-                                            }}
-                                        />
-                                        <span className="text-sm font-mono text-gray-500">{banner.backgroundColor}</span>
-                                    </div>
-                                </div>
-
-                                <ImageUploader 
-                                    label="Banner Image" 
-                                    value={banner.image} 
-                                    onChange={(val) => {
-                                        const newBanners = [...(localSettings.heroBanners || [])];
-                                        newBanners[index] = { ...newBanners[index], image: val };
-                                        updateField('heroBanners', newBanners);
-                                    }} 
-                                />
-
-                                <LinkInput 
-                                    linkType={banner.linkType || 'NONE'}
-                                    linkValue={banner.linkValue || ''}
-                                    onTypeChange={(t) => {
-                                         const newBanners = [...(localSettings.heroBanners || [])];
-                                         newBanners[index] = { ...newBanners[index], linkType: t };
-                                         updateField('heroBanners', newBanners);
-                                    }}
-                                    onValueChange={(v) => {
-                                         const newBanners = [...(localSettings.heroBanners || [])];
-                                         newBanners[index] = { ...newBanners[index], linkValue: v };
-                                         updateField('heroBanners', newBanners);
-                                    }}
-                                />
-                                
-                                <button 
-                                    onClick={() => {
-                                         const newBanners = [...(localSettings.heroBanners || [])];
-                                         newBanners.splice(index, 1);
-                                         updateField('heroBanners', newBanners);
-                                    }}
-                                    className="mt-4 text-xs text-red-500 font-bold hover:underline flex items-center gap-1"
-                                >
-                                    <Trash2 size={12}/> Remove Slide
-                                </button>
-                            </div>
-                        ))}
-                        
-                        <button 
-                            onClick={() => {
-                                 const newBanners = [...(localSettings.heroBanners || [])];
-                                 newBanners.push({ 
-                                    title: 'New Slide', 
-                                    subtitle: 'Description here', 
-                                    image: '', 
-                                    backgroundColor: '#111827',
-                                    linkType: 'NONE'
-                                 });
-                                 updateField('heroBanners', newBanners);
-                            }}
-                            className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold hover:border-black hover:text-black transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Plus size={16}/> Add Slide
-                        </button>
+                    <h4 className="font-bold text-lg border-b pb-2">Hero Carousel (Top Banners)</h4>
+                    <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl">
+                        <div>
+                            <div className="font-bold">Enable Top Banners</div>
+                            <div className="text-xs text-gray-500">Show the rotating carousel at the top of the home page.</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" checked={localSettings.heroBannersEnabled !== false} onChange={e => updateField('heroBannersEnabled', e.target.checked)} />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
+                        </label>
                     </div>
+                    {localSettings.heroBannersEnabled !== false && (
+                        <div className="space-y-8 mt-4">
+                            {localSettings.heroBanners?.map((banner, index) => (
+                                <div key={index} className="bg-gray-50 p-6 rounded-2xl border border-gray-200 relative">
+                                    <div className="absolute top-4 right-4 bg-black text-white text-xs font-bold px-2 py-1 rounded">
+                                        Slide {index + 1}
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Title</label>
+                                            <input 
+                                                className="w-full bg-white p-3 rounded-lg border-2 border-transparent focus:border-black outline-none" 
+                                                value={banner.title} 
+                                                onChange={(e) => {
+                                                    const newBanners = [...(localSettings.heroBanners || [])];
+                                                    newBanners[index] = { ...newBanners[index], title: e.target.value };
+                                                    updateField('heroBanners', newBanners);
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Subtitle</label>
+                                            <input 
+                                                className="w-full bg-white p-3 rounded-lg border-2 border-transparent focus:border-black outline-none" 
+                                                value={banner.subtitle} 
+                                                onChange={(e) => {
+                                                    const newBanners = [...(localSettings.heroBanners || [])];
+                                                    newBanners[index] = { ...newBanners[index], subtitle: e.target.value };
+                                                    updateField('heroBanners', newBanners);
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Background Color</label>
+                                        <div className="flex gap-2 items-center">
+                                             <input 
+                                                type="color"
+                                                className="h-10 w-10 rounded cursor-pointer border-0 p-0" 
+                                                value={banner.backgroundColor || '#000000'} 
+                                                onChange={(e) => {
+                                                    const newBanners = [...(localSettings.heroBanners || [])];
+                                                    newBanners[index] = { ...newBanners[index], backgroundColor: e.target.value };
+                                                    updateField('heroBanners', newBanners);
+                                                }}
+                                            />
+                                            <span className="text-sm font-mono text-gray-500">{banner.backgroundColor}</span>
+                                        </div>
+                                    </div>
+
+                                    <ImageUploader 
+                                        label="Banner Image" 
+                                        value={banner.image} 
+                                        onChange={(val) => {
+                                            const newBanners = [...(localSettings.heroBanners || [])];
+                                            newBanners[index] = { ...newBanners[index], image: val };
+                                            updateField('heroBanners', newBanners);
+                                        }} 
+                                    />
+
+                                    <LinkInput 
+                                        linkType={banner.linkType || 'NONE'}
+                                        linkValue={banner.linkValue || ''}
+                                        onTypeChange={(t) => {
+                                             const newBanners = [...(localSettings.heroBanners || [])];
+                                             newBanners[index] = { ...newBanners[index], linkType: t };
+                                             updateField('heroBanners', newBanners);
+                                        }}
+                                        onValueChange={(v) => {
+                                             const newBanners = [...(localSettings.heroBanners || [])];
+                                             newBanners[index] = { ...newBanners[index], linkValue: v };
+                                             updateField('heroBanners', newBanners);
+                                        }}
+                                    />
+                                    
+                                    <button 
+                                        onClick={() => {
+                                             const newBanners = [...(localSettings.heroBanners || [])];
+                                             newBanners.splice(index, 1);
+                                             updateField('heroBanners', newBanners);
+                                        }}
+                                        className="mt-4 text-xs text-red-500 font-bold hover:underline flex items-center gap-1"
+                                    >
+                                        <Trash2 size={12}/> Remove Slide
+                                    </button>
+                                </div>
+                            ))}
+                            
+                            <button 
+                                onClick={() => {
+                                     const newBanners = [...(localSettings.heroBanners || [])];
+                                     newBanners.push({ 
+                                        title: 'New Slide', 
+                                        subtitle: 'Description here', 
+                                        image: '', 
+                                        backgroundColor: '#111827',
+                                        linkType: 'NONE'
+                                     });
+                                     updateField('heroBanners', newBanners);
+                                }}
+                                className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold hover:border-black hover:text-black transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Plus size={16}/> Add Slide
+                            </button>
+                        </div>
+                    )}
+                </section>
+
+                <section className="space-y-4">
+                    <h4 className="font-bold text-lg border-b pb-2">Full Image Banner</h4>
+                    <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl">
+                        <div>
+                            <div className="font-bold">Enable Full Image Banner</div>
+                            <div className="text-xs text-gray-500">Show a full-width image banner on the home page.</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" checked={localSettings.fullImageBannerEnabled || false} onChange={e => updateField('fullImageBannerEnabled', e.target.checked)} />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
+                        </label>
+                    </div>
+                    {localSettings.fullImageBannerEnabled && (
+                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                            <ImageUploader 
+                                label="Full Width Image" 
+                                value={localSettings.fullImageBanner?.image || ''} 
+                                onChange={(val) => updateField('fullImageBanner', { ...localSettings.fullImageBanner, image: val })} 
+                            />
+                            <LinkInput 
+                                linkType={localSettings.fullImageBanner?.linkType || 'NONE'}
+                                linkValue={localSettings.fullImageBanner?.linkValue || ''}
+                                onTypeChange={(t) => updateField('fullImageBanner', { image: localSettings.fullImageBanner?.image || '', ...localSettings.fullImageBanner, linkType: t })}
+                                onValueChange={(v) => updateField('fullImageBanner', { image: localSettings.fullImageBanner?.image || '', ...localSettings.fullImageBanner, linkValue: v })}
+                            />
+                        </div>
+                    )}
+                </section>
+
+                <section className="space-y-4">
+                    <h4 className="font-bold text-lg border-b pb-2">Video Banner</h4>
+                    <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl">
+                        <div>
+                            <div className="font-bold">Enable Video Banner</div>
+                            <div className="text-xs text-gray-500">Show a full-width video banner on the home page.</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" checked={localSettings.videoBannerEnabled || false} onChange={e => updateField('videoBannerEnabled', e.target.checked)} />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
+                        </label>
+                    </div>
+                    {localSettings.videoBannerEnabled && (
+                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Video URL (MP4)</label>
+                                <input 
+                                    className="w-full bg-white p-3 rounded-lg border-2 border-transparent focus:border-black outline-none" 
+                                    placeholder="https://example.com/video.mp4"
+                                    value={localSettings.videoBanner?.videoUrl || ''} 
+                                    onChange={(e) => updateField('videoBanner', { ...localSettings.videoBanner, videoUrl: e.target.value })}
+                                />
+                            </div>
+                            <LinkInput 
+                                linkType={localSettings.videoBanner?.linkType || 'NONE'}
+                                linkValue={localSettings.videoBanner?.linkValue || ''}
+                                onTypeChange={(t) => updateField('videoBanner', { videoUrl: localSettings.videoBanner?.videoUrl || '', ...localSettings.videoBanner, linkType: t })}
+                                onValueChange={(v) => updateField('videoBanner', { videoUrl: localSettings.videoBanner?.videoUrl || '', ...localSettings.videoBanner, linkValue: v })}
+                            />
+                        </div>
+                    )}
                 </section>
 
                 <section className="space-y-4">
@@ -1232,7 +1309,19 @@ const SettingsManager: React.FC = () => {
                                 )}
 
                                 {gw.id === PaymentMethod.KOKO && (
-                                    <div>
+                                    <div className="space-y-3">
+                                        <select
+                                            className="w-full bg-white p-2 rounded border border-gray-200 text-sm font-bold"
+                                            value={gw.kokoEnv || 'sandbox'}
+                                            onChange={(e) => {
+                                                const newGateways = [...localSettings.paymentGateways];
+                                                newGateways[index] = { ...newGateways[index], kokoEnv: e.target.value as 'sandbox' | 'live' };
+                                                updateField('paymentGateways', newGateways);
+                                            }}
+                                        >
+                                            <option value="sandbox">Sandbox (Testing)</option>
+                                            <option value="live">Live (Production)</option>
+                                        </select>
                                         <input 
                                             className="w-full bg-white p-2 rounded border border-gray-200 text-sm font-mono" 
                                             placeholder="Koko Merchant ID"
@@ -1240,6 +1329,26 @@ const SettingsManager: React.FC = () => {
                                             onChange={(e) => {
                                                 const newGateways = [...localSettings.paymentGateways];
                                                 newGateways[index] = { ...newGateways[index], kokoMerchantId: e.target.value };
+                                                updateField('paymentGateways', newGateways);
+                                            }}
+                                        />
+                                        <input 
+                                            className="w-full bg-white p-2 rounded border border-gray-200 text-sm font-mono" 
+                                            placeholder="Koko API Key"
+                                            value={gw.kokoApiKey || ''}
+                                            onChange={(e) => {
+                                                const newGateways = [...localSettings.paymentGateways];
+                                                newGateways[index] = { ...newGateways[index], kokoApiKey: e.target.value };
+                                                updateField('paymentGateways', newGateways);
+                                            }}
+                                        />
+                                        <textarea 
+                                            className="w-full bg-white p-2 rounded border border-gray-200 text-sm font-mono h-24" 
+                                            placeholder="Koko Private Key (RSA)"
+                                            value={gw.kokoPrivateKey || ''}
+                                            onChange={(e) => {
+                                                const newGateways = [...localSettings.paymentGateways];
+                                                newGateways[index] = { ...newGateways[index], kokoPrivateKey: e.target.value };
                                                 updateField('paymentGateways', newGateways);
                                             }}
                                         />

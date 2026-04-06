@@ -106,6 +106,9 @@ export interface PaymentGatewayConfig {
   payhereSecret?: string;
   payhereEnv?: 'sandbox' | 'live';
   kokoMerchantId?: string;
+  kokoApiKey?: string;
+  kokoPrivateKey?: string;
+  kokoEnv?: 'sandbox' | 'live';
   installmentProvider?: string;
   bankDetails?: BankDetails;
   instructions?: string;
@@ -132,11 +135,28 @@ export interface SiteSettings {
   siteLogo?: string;
   siteLogoDark?: string;
   siteFavicon?: string;
+  kokoLogo?: string;
+  payhereLogo?: string;
   
   heroTitle: string; 
   heroSubtitle: string; 
   heroImage: string; 
   heroBanners: HeroBanner[];
+  heroBannersEnabled?: boolean;
+
+  fullImageBannerEnabled?: boolean;
+  fullImageBanner?: {
+    image: string;
+    linkType?: LinkType;
+    linkValue?: string;
+  };
+
+  videoBannerEnabled?: boolean;
+  videoBanner?: {
+    videoUrl: string;
+    linkType?: LinkType;
+    linkValue?: string;
+  };
   
   bannerTitle: string;
   bannerText: string;

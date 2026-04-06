@@ -7,6 +7,7 @@ import * as db from '../services/db';
 import * as web3 from '../services/web3';
 import { uploadToLocal } from '../services/ipfs';
 import md5 from 'crypto-js/md5';
+import { KJUR } from 'jsrsasign';
 import { ShoppingBag, Star, X, Plus, Minus, CreditCard, Banknote, Truck, Heart, ArrowRight, ArrowLeft, Search, Menu, Lock, AlertCircle, CheckCircle, User, Wallet, Phone, Zap, Maximize2, Send, Landmark, Mail, MapPin, Loader2, UploadCloud, Trash2, Moon, Sun, Monitor } from 'lucide-react';
 
 // --- SEO Helper ---
@@ -52,7 +53,7 @@ const Logo: React.FC<{ src?: string; darkSrc?: string; forceDark?: boolean; clas
     const { theme } = useShop();
     const [error, setError] = useState(false);
     
-    const isDark = forceDark || theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const isDark = forceDark || theme === 'dark';
     const activeSrc = isDark && darkSrc ? darkSrc : src;
 
     const validSrc = useMemo(() => db.getOptimizedImage(activeSrc, 200), [activeSrc]);
@@ -107,7 +108,11 @@ const Footer: React.FC = () => {
              <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm font-medium gap-4 text-center md:text-left">
                 <div>&copy; 2024 Arobazzar Inc. • <a href="https://arobazzar.lk" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" aria-label="Visit Website">arobazzar.lk</a></div>
                 <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
-                    <span className="text-xs md:text-sm">We accept Visa, Mastercard, Google Pay, HelaPay & all PayHere options</span>
+                    {settings?.payhereLogo ? (
+                        <img src={settings.payhereLogo} alt="PayHere Supported Methods" className="h-8 object-contain" />
+                    ) : (
+                        <span className="text-xs md:text-sm">We accept Visa, Mastercard, Google Pay, HelaPay & all PayHere options</span>
+                    )}
                     <span className="flex items-center gap-2"><Lock size={12}/> Secure Payment</span>
                 </div>
              </div>
@@ -788,6 +793,8 @@ const CheckoutPage: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [showWalletSelector, setShowWalletSelector] = useState(false);
+    const [showKokoModal, setShowKokoModal] = useState(false);
+    const [pendingOrderData, setPendingOrderData] = useState<any>(null);
     const [couponCode, setCouponCode] = useState('');
     const [discountApplied, setDiscountApplied] = useState<{code: string, amount: number} | null>(null);
     const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -943,6 +950,112 @@ const CheckoutPage: React.FC = () => {
         }
     };
 
+    const handleKokoPayment = async () => {
+        if (!validateForm()) return;
+        const kokoConfig = settings?.paymentGateways?.find(g => g.id === PaymentMethod.KOKO);
+        if (!kokoConfig || !kokoConfig.kokoMerchantId || !kokoConfig.kokoApiKey || !kokoConfig.kokoPrivateKey) {
+            notify("Koko Payment is not properly configured.", "error");
+            return;
+        }
+
+        setIsProcessing(true);
+        const orderId = `ORD-${Math.floor(Math.random() * 90000) + 10000}`;
+        const amountFormatted = finalTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
+        
+        const merchant = kokoConfig.kokoMerchantId;
+        const amount = amountFormatted;
+        const currency = 'LKR';
+        const pluginName = 'customapi';
+        const pluginVersion = '1.0.1';
+        const reference = `#${orderId}`;
+        const firstName = formData.name.split(' ')[0] || '';
+        const lastName = formData.name.split(' ').slice(1).join(' ') || '';
+        const email = formData.email;
+        const mobile = formData.phone;
+        const apiKey = kokoConfig.kokoApiKey;
+
+        const responseUrl = window.location.origin;
+        const returnUrl = window.location.origin + '?koko_success=true';
+        const cancelUrl = window.location.origin + '?koko_cancel=true';
+        const productName = 'Arobazzar Order';
+
+        const dataString = merchant + amount + currency + pluginName + pluginVersion +
+            returnUrl + cancelUrl + orderId + reference +
+            firstName + lastName + email + productName +
+            apiKey + responseUrl;
+
+        try {
+            // Sign the dataString using RSA private key
+            const sig = new KJUR.crypto.Signature({ alg: "SHA256withRSA" });
+            sig.init(kokoConfig.kokoPrivateKey);
+            sig.updateString(dataString);
+            const signatureHex = sig.sign();
+            // Convert hex to base64
+            const signatureEncoded = btoa(signatureHex.match(/\w{2}/g)!.map(a => String.fromCharCode(parseInt(a, 16))).join(""));
+
+            const kokoArgs = {
+                '_mId': merchant,
+                'api_key': apiKey,
+                '_returnUrl': returnUrl,
+                '_responseUrl': responseUrl,
+                '_currency': currency,
+                '_amount': amount,
+                '_reference': reference,
+                '_pluginName': pluginName,
+                '_pluginVersion': pluginVersion,
+                '_cancelUrl': cancelUrl,
+                '_orderId': orderId,
+                '_firstName': firstName,
+                '_lastName': lastName,
+                '_email': email,
+                '_description': productName,
+                'dataString': dataString,
+                'signature': signatureEncoded,
+                '_mobileNo': mobile
+            };
+
+            // Create a form and submit it
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = kokoConfig.kokoEnv === 'live' ? 'https://api.paykoko.com/api/merchants/orderCreate' : 'https://qaapi.paykoko.com/api/merchants/orderCreate';
+            
+            for (const [key, value] of Object.entries(kokoArgs)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
+            }
+
+            document.body.appendChild(form);
+            
+            // Save the pending order to localStorage so it can be recovered if needed
+            localStorage.setItem('arobazzar_pending_koko_order', JSON.stringify({
+                id: orderId,
+                customerName: formData.name,
+                customerEmail: formData.email,
+                contactNumber: formData.phone,
+                address: formData.address,
+                items: [...cart],
+                total: finalTotal,
+                subtotal: subTotal,
+                deliveryCharge: deliveryCharge,
+                status: OrderStatus.PROCESSING,
+                paymentMethod: PaymentMethod.KOKO,
+                date: new Date().toISOString().split('T')[0],
+                discountCode: discountApplied?.code,
+                discountApplied: discountApplied?.amount
+            }));
+
+            form.submit();
+
+        } catch (error) {
+            console.error(error);
+            notify("Failed to generate Koko payment request. Check Private Key.", "error");
+            setIsProcessing(false);
+        }
+    };
+
     const handlePlaceOrder = async (preGeneratedOrderId?: string) => {
         if (!paymentMethod) return;
         if (!validateForm()) return;
@@ -966,11 +1079,17 @@ const CheckoutPage: React.FC = () => {
             } else if (paymentMethod === PaymentMethod.PAYPAL) {
                 txHash = transactionRef;
                 initialStatus = OrderStatus.PROCESSING; // PayPal payment successful
-            } else if (paymentMethod === PaymentMethod.KOKO || paymentMethod === PaymentMethod.INSTALLMENTS) {
-                // Simulate redirect to payment gateway
-                notify(`Redirecting to ${paymentMethod === PaymentMethod.KOKO ? 'Koko' : 'Installment Provider'}...`, "info");
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                initialStatus = OrderStatus.PROCESSING; // Assume successful after redirect simulation
+            } else if (paymentMethod === PaymentMethod.KOKO) {
+                handleKokoPayment();
+                return;
+            } else if (paymentMethod === PaymentMethod.INSTALLMENTS) {
+                // Show modal to simulate payment gateway redirection
+                setPendingOrderData({
+                    id: tempOrderId, customerName: formData.name, customerEmail: formData.email, contactNumber: formData.phone, address: formData.address, items: [...cart], total: finalTotal, subtotal: subTotal, deliveryCharge: deliveryCharge, status: OrderStatus.PROCESSING, paymentMethod, transactionHash: txHash, date: new Date().toISOString().split('T')[0], discountCode: discountApplied?.code, discountApplied: discountApplied?.amount
+                });
+                setShowKokoModal(true);
+                setIsProcessing(false);
+                return;
             } else { 
                 await new Promise(resolve => setTimeout(resolve, 1500)); 
             }
@@ -1056,6 +1175,48 @@ const CheckoutPage: React.FC = () => {
     return (
         <PayPalScriptProvider options={{ "clientId": paypalClientId || "sb", currency: "USD", intent: "capture" }}>
             {showWalletSelector && <WalletSelectionModal onClose={() => setShowWalletSelector(false)} onSelect={handleWalletSelect} />}
+            {showKokoModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-3xl max-w-md w-full shadow-2xl text-center">
+                        {settings?.kokoLogo ? (
+                            <img src={settings.kokoLogo} alt="Koko" className="h-12 mx-auto mb-6 object-contain" />
+                        ) : (
+                            <div className="w-16 h-16 bg-pink-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 font-black text-xl">KOKO</div>
+                        )}
+                        <h3 className="text-2xl font-black mb-2">Complete Payment</h3>
+                        <p className="text-gray-500 mb-8">You are being redirected to the secure payment gateway. Please complete your payment to place the order.</p>
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => {
+                                    setShowKokoModal(false);
+                                    notify("Payment cancelled", "error");
+                                }} 
+                                className="flex-1 py-4 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={async () => {
+                                    setShowKokoModal(false);
+                                    setIsProcessing(true);
+                                    try {
+                                        await addOrder(pendingOrderData, pendingOrderData.discountCode);
+                                        clearCart(); 
+                                        setIsSuccess(true);
+                                    } catch (error) {
+                                        notify((error as Error).message || "Payment Failed", "error");
+                                    } finally {
+                                        setIsProcessing(false);
+                                    }
+                                }} 
+                                className="flex-1 py-4 font-bold bg-pink-600 text-white hover:bg-pink-700 rounded-xl transition-colors shadow-lg shadow-pink-200"
+                            >
+                                Simulate Success
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="max-w-7xl mx-auto pt-24 md:pt-36 pb-12 px-4 md:px-8 animate-fade-in">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                     {/* Left Side: Order Summary */}
@@ -1082,21 +1243,21 @@ const CheckoutPage: React.FC = () => {
                                             <div className="space-y-5">
                                                 <div className="space-y-1.5">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Name *</label>
-                                                    <input placeholder="Enter your full name" type="text" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} aria-label="Full Name" autoComplete="name"/>
+                                                    <input placeholder="Enter your full name" type="text" className="w-full bg-white dark:bg-gray-800 dark:text-white border-2 border-transparent dark:border-gray-700 focus:border-black dark:focus:border-white p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} aria-label="Full Name" autoComplete="name"/>
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                                     <div className="space-y-1.5">
                                                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address *</label>
-                                                        <input placeholder="email@example.com" type="email" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} aria-label="Email" autoComplete="email"/>
+                                                        <input placeholder="email@example.com" type="email" className="w-full bg-white dark:bg-gray-800 dark:text-white border-2 border-transparent dark:border-gray-700 focus:border-black dark:focus:border-white p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} aria-label="Email" autoComplete="email"/>
                                                     </div>
                                                     <div className="space-y-1.5">
                                                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Phone Number *</label>
-                                                        <input placeholder="+94 7X XXX XXXX" type="tel" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} aria-label="Phone" autoComplete="tel"/>
+                                                        <input placeholder="+94 7X XXX XXXX" type="tel" className="w-full bg-white dark:bg-gray-800 dark:text-white border-2 border-transparent dark:border-gray-700 focus:border-black dark:focus:border-white p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} aria-label="Phone" autoComplete="tel"/>
                                                     </div>
                                                 </div>
                                                 <div className="space-y-1.5">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Shipping Address *</label>
-                                                    <textarea placeholder="House No, Street, City, etc." className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm resize-none" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} aria-label="Address" autoComplete="street-address"></textarea>
+                                                    <textarea placeholder="House No, Street, City, etc." className="w-full bg-white dark:bg-gray-800 dark:text-white border-2 border-transparent dark:border-gray-700 focus:border-black dark:focus:border-white p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm resize-none" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} aria-label="Address" autoComplete="street-address"></textarea>
                                                 </div>
                                             </div>
                                         </div>
@@ -1151,7 +1312,9 @@ const CheckoutPage: React.FC = () => {
                                                                 return (
                                                                     <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-pink-600 bg-pink-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
                                                                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${m.id === PaymentMethod.KOKO ? 'bg-pink-600 text-white' : 'bg-purple-600 text-white'}`}>
-                                                                            {m.id === PaymentMethod.KOKO ? <span className="font-black text-xs tracking-tighter">KOKO</span> : <CreditCard size={24}/>}
+                                                                            {m.id === PaymentMethod.KOKO ? (
+                                                                                settings?.kokoLogo ? <img src={settings.kokoLogo} alt="Koko" className="w-8 h-8 object-contain" /> : <span className="font-black text-xs tracking-tighter">KOKO</span>
+                                                                            ) : <CreditCard size={24}/>}
                                                                         </div>
                                                                         <div>
                                                                             <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
@@ -1216,9 +1379,9 @@ const CheckoutPage: React.FC = () => {
                                                         <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Account No</span><span className="font-mono font-bold text-lg text-indigo-700 select-all">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.accountNumber || 'N/A'}</span></div>
                                                         <div className="flex justify-between"><span className="text-gray-500">Branch</span><span className="font-bold text-gray-900">{settings?.paymentGateways.find(g => g.id === PaymentMethod.BANK_DEPOSIT)?.bankDetails?.branch || 'N/A'}</span></div>
                                                     </div>
-                                                    <div className="pt-4 border-t border-gray-100">
+                                                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
                                                         <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 pl-1">Payment Verification</label>
-                                                        <input type="text" placeholder="Enter Transaction Ref (Optional if slip uploaded)" className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-500 p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm mb-3" value={transactionRef} onChange={e => setTransactionRef(e.target.value)} aria-label="Transaction Reference"/>
+                                                        <input type="text" placeholder="Enter Transaction Ref (Optional if slip uploaded)" className="w-full bg-gray-50 dark:bg-gray-800 dark:text-white border-2 border-transparent dark:border-gray-700 focus:border-indigo-500 dark:focus:border-indigo-400 p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm mb-3" value={transactionRef} onChange={e => setTransactionRef(e.target.value)} aria-label="Transaction Reference"/>
                                                         
                                                         <div className="flex items-center gap-3">
                                                             <input 
@@ -1391,55 +1554,92 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
     return (
         <div className="animate-fade-in">
             <SeoManager title="Home" description={settings?.heroSubtitle} />
-            <div id="hero" className="pt-24 md:pt-32 pb-8 md:pb-12 px-2 md:px-6">
-                <div 
-                    className="max-w-7xl mx-auto rounded-[2rem] md:rounded-[3rem] px-6 md:px-24 py-12 md:py-16 relative overflow-hidden h-auto md:min-h-[500px] flex items-center group transition-colors duration-1000 ease-in-out cursor-pointer transform-gpu min-h-[400px]" 
-                    style={{ backgroundColor: currentBanner.backgroundColor || '#111827', color: textColor }}
-                    onClick={() => handleBannerClick(currentBanner.linkType, currentBanner.linkValue)}
-                >
-                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] md:w-[600px] md:h-[600px] rounded-full md:blur-3xl blur-xl opacity-20 pointer-events-none transition-colors duration-1000 transform-gpu ${isDarkText ? 'bg-black/10' : 'bg-white/10'}`}></div>
-                    <div className="relative z-10 w-full grid grid-cols-1 md:grid-cols-2 items-center gap-12">
-                        <div className="text-left animate-slide-up order-2 md:order-1" key={`text-${currentBannerIndex}`}>
-                            <span className={`inline-block py-2 px-4 border rounded-full text-xs font-bold tracking-widest uppercase mb-4 md:mb-6 shadow-sm transition-colors duration-1000 ${isDarkText ? 'border-black/20 bg-black/10 text-black/80' : 'border-white/20 bg-white/10 text-white/80'}`}>{settings?.bannerTitle || "New Season"}</span>
-                            <h1 className="text-4xl md:text-7xl font-display font-black tracking-tighter leading-[0.95] mb-4 md:mb-6 break-words drop-shadow-xl transition-colors duration-1000">{currentBanner.title || "FUTURE RETAIL."}</h1>
-                            <p className={`text-lg md:text-xl font-medium max-w-md mb-8 leading-relaxed transition-colors duration-1000 ${isDarkText ? 'text-gray-800' : 'text-white/80'}`}>{currentBanner.subtitle || "Arobazzar brings you the world's most desired products."}</p>
-                            <Button 
-                                variant={isDarkText ? 'primary' : 'secondary'} 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (currentBanner.linkType && currentBanner.linkType !== 'NONE' && currentBanner.linkValue) {
-                                        handleBannerClick(currentBanner.linkType, currentBanner.linkValue);
-                                    } else {
-                                        navigateTo('SHOP');
-                                    }
-                                }}
-                            >
-                                Shop Now <ArrowRight size={18} />
-                            </Button>
-                        </div>
-                        <div className="relative order-1 md:order-2 h-[300px] md:h-[500px] flex items-center justify-center" key={`img-${currentBannerIndex}`}>
-                            <div className={`absolute inset-0 rounded-full md:blur-3xl blur-xl transform-gpu scale-75 md:animate-pulse-slow transition-colors duration-1000 ${isDarkText ? 'bg-black/20' : 'bg-white/20'}`}></div>
-                            <img 
-                                src={db.getOptimizedImage(currentBanner.image, 800)} 
-                                alt={currentBanner.title} 
-                                className="w-full h-full object-contain drop-shadow-[0_35px_35px_rgba(0,0,0,0.5)] md:animate-float transform-gpu hover:scale-105 transition-transform duration-500 will-change-transform" 
-                                onError={(e) => { 
-                                    const target = e.currentTarget;
-                                    target.onerror = null;
-                                    if (target.src.includes('wsrv.nl') && currentBanner.image && !currentBanner.image.includes('wsrv.nl')) {
-                                        target.src = currentBanner.image;
-                                    } else {
-                                        target.style.display = 'none'; 
-                                    }
-                                }} 
-                                referrerPolicy="no-referrer" 
-                                loading="eager" 
-                                decoding="async"
-                            />
+            
+            {settings?.heroBannersEnabled !== false && (
+                <div id="hero" className="pt-24 md:pt-32 pb-8 md:pb-12 px-2 md:px-6">
+                    <div 
+                        className="max-w-7xl mx-auto rounded-[2rem] md:rounded-[3rem] px-6 md:px-24 py-12 md:py-16 relative overflow-hidden h-auto md:min-h-[500px] flex items-center group transition-colors duration-1000 ease-in-out cursor-pointer transform-gpu min-h-[400px]" 
+                        style={{ backgroundColor: currentBanner.backgroundColor || '#111827', color: textColor }}
+                        onClick={() => handleBannerClick(currentBanner.linkType, currentBanner.linkValue)}
+                    >
+                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] md:w-[600px] md:h-[600px] rounded-full md:blur-3xl blur-xl opacity-20 pointer-events-none transition-colors duration-1000 transform-gpu ${isDarkText ? 'bg-black/10' : 'bg-white/10'}`}></div>
+                        <div className="relative z-10 w-full grid grid-cols-1 md:grid-cols-2 items-center gap-12">
+                            <div className="text-left animate-slide-up order-2 md:order-1" key={`text-${currentBannerIndex}`}>
+                                <span className={`inline-block py-2 px-4 border rounded-full text-xs font-bold tracking-widest uppercase mb-4 md:mb-6 shadow-sm transition-colors duration-1000 ${isDarkText ? 'border-black/20 bg-black/10 text-black/80' : 'border-white/20 bg-white/10 text-white/80'}`}>{settings?.bannerTitle || "New Season"}</span>
+                                <h1 className="text-4xl md:text-7xl font-display font-black tracking-tighter leading-[0.95] mb-4 md:mb-6 break-words drop-shadow-xl transition-colors duration-1000">{currentBanner.title || "FUTURE RETAIL."}</h1>
+                                <p className={`text-lg md:text-xl font-medium max-w-md mb-8 leading-relaxed transition-colors duration-1000 ${isDarkText ? 'text-gray-800' : 'text-white/80'}`}>{currentBanner.subtitle || "Arobazzar brings you the world's most desired products."}</p>
+                                <Button 
+                                    variant={isDarkText ? 'primary' : 'secondary'} 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (currentBanner.linkType && currentBanner.linkType !== 'NONE' && currentBanner.linkValue) {
+                                            handleBannerClick(currentBanner.linkType, currentBanner.linkValue);
+                                        } else {
+                                            navigateTo('SHOP');
+                                        }
+                                    }}
+                                >
+                                    Shop Now <ArrowRight size={18} />
+                                </Button>
+                            </div>
+                            <div className="relative order-1 md:order-2 h-[300px] md:h-[500px] flex items-center justify-center" key={`img-${currentBannerIndex}`}>
+                                <div className={`absolute inset-0 rounded-full md:blur-3xl blur-xl transform-gpu scale-75 md:animate-pulse-slow transition-colors duration-1000 ${isDarkText ? 'bg-black/20' : 'bg-white/20'}`}></div>
+                                <img 
+                                    src={db.getOptimizedImage(currentBanner.image, 800)} 
+                                    alt={currentBanner.title} 
+                                    className="w-full h-full object-contain drop-shadow-[0_35px_35px_rgba(0,0,0,0.5)] md:animate-float transform-gpu hover:scale-105 transition-transform duration-500 will-change-transform" 
+                                    onError={(e) => { 
+                                        const target = e.currentTarget;
+                                        target.onerror = null;
+                                        if (target.src.includes('wsrv.nl') && currentBanner.image && !currentBanner.image.includes('wsrv.nl')) {
+                                            target.src = currentBanner.image;
+                                        } else {
+                                            target.style.display = 'none'; 
+                                        }
+                                    }} 
+                                    referrerPolicy="no-referrer" 
+                                    loading="eager" 
+                                    decoding="async"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
+
+            {settings?.fullImageBannerEnabled && settings?.fullImageBanner?.image && (
+                <div className="px-2 md:px-6 mb-12">
+                    <div 
+                        className="max-w-7xl mx-auto rounded-[2rem] md:rounded-[3rem] overflow-hidden cursor-pointer"
+                        onClick={() => handleBannerClick(settings.fullImageBanner?.linkType, settings.fullImageBanner?.linkValue)}
+                    >
+                        <img 
+                            src={settings.fullImageBanner.image} 
+                            alt="Full Width Banner" 
+                            className="w-full h-auto object-cover"
+                            referrerPolicy="no-referrer"
+                        />
+                    </div>
+                </div>
+            )}
+
+            {settings?.videoBannerEnabled && settings?.videoBanner?.videoUrl && (
+                <div className="px-2 md:px-6 mb-12">
+                    <div 
+                        className="max-w-7xl mx-auto rounded-[2rem] md:rounded-[3rem] overflow-hidden cursor-pointer relative"
+                        onClick={() => handleBannerClick(settings.videoBanner?.linkType, settings.videoBanner?.linkValue)}
+                    >
+                        <video 
+                            src={settings.videoBanner.videoUrl} 
+                            className="w-full h-auto object-cover"
+                            autoPlay 
+                            loop 
+                            muted 
+                            playsInline
+                        />
+                    </div>
+                </div>
+            )}
 
             <div id="shop" className="max-w-7xl mx-auto px-6 mb-12">
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
@@ -1721,7 +1921,7 @@ const TrendingPage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onPr
 };
 
 export const StoreFront: React.FC = () => {
-  const { cart, removeFromCart, updateCartQuantity, navigateTo, currentPage, settings, theme, setTheme } = useShop();
+  const { cart, removeFromCart, updateCartQuantity, navigateTo, currentPage, settings, theme, setTheme, addOrder, clearCart, notify } = useShop();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1731,6 +1931,36 @@ export const StoreFront: React.FC = () => {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isKokoSuccess = urlParams.get('koko_success');
+    const isKokoCancel = urlParams.get('koko_cancel');
+    const pendingOrderStr = localStorage.getItem('arobazzar_pending_koko_order');
+
+    if (isKokoSuccess && pendingOrderStr) {
+        try {
+            const pendingOrder = JSON.parse(pendingOrderStr);
+            addOrder(pendingOrder, pendingOrder.discountCode).then(() => {
+                clearCart();
+                localStorage.removeItem('arobazzar_pending_koko_order');
+                // Remove query params
+                window.history.replaceState({}, document.title, window.location.pathname);
+                notify("Payment successful! Order placed.", "success");
+                navigateTo('PROFILE'); // Or some success page
+            }).catch(e => {
+                notify("Failed to save order. Please contact support.", "error");
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    } else if (isKokoCancel) {
+        localStorage.removeItem('arobazzar_pending_koko_order');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        notify("Payment cancelled.", "info");
+        navigateTo('CHECKOUT');
+    }
+  }, [addOrder, clearCart, notify, navigateTo]);
 
   if (currentPage === 'LOGIN') return <LoginPage />;
   if (currentPage === 'PRIVACY') return <PrivacyPolicy />;
@@ -1761,8 +1991,8 @@ export const StoreFront: React.FC = () => {
                 </div>
             )}
             <div className="flex items-center gap-4">
-                 <button onClick={() => setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark')} className="p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Toggle Theme">
-                    {theme === 'dark' ? <Moon size={20} /> : theme === 'light' ? <Sun size={20} /> : <Monitor size={20} />}
+                 <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Toggle Theme">
+                    {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
                  </button>
                  <button onClick={() => navigateTo('PROFILE')} className="p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="My Profile"><User size={20} /></button>
                 <button onClick={() => setIsCartOpen(true)} className="relative group bg-white/80 dark:bg-gray-800/80 p-3 rounded-full shadow-sm hover:shadow-md transition-all hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" aria-label="Open Cart"><ShoppingBag size={20} />{cart.length > 0 && (<span className="absolute -top-1 -right-1 bg-black text-white dark:bg-white dark:text-black group-hover:bg-white group-hover:text-black dark:group-hover:bg-black dark:group-hover:text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-gray-800 animate-scale-in">{cart.reduce((a, b) => a + b.quantity, 0)}</span>)}</button>

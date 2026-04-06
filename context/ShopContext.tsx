@@ -3,7 +3,7 @@ import { Product, Order, CartItem, OrderStatus, Review, SiteSettings, Notificati
 import * as db from '../services/db';
 
 export type Page = 'HOME' | 'SHOP' | 'TRENDING' | 'ADMIN' | 'LOGIN' | 'PRIVACY' | 'TERMS' | 'PROFILE' | 'CONTACT' | 'PAYMENT' | 'RETURN' | 'CHECKOUT' | 'PRODUCT_DETAILS';
-export type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemeMode = 'light' | 'dark';
 
 interface ShopContextType {
   products: Product[];
@@ -127,8 +127,9 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [theme, setThemeState] = useState<ThemeMode>(() => {
       try {
           const local = localStorage.getItem('arobazzar_theme');
-          return (local as ThemeMode) || 'system';
-      } catch { return 'system'; }
+          if (local === 'dark') return 'dark';
+          return 'light';
+      } catch { return 'light'; }
   });
 
   const setTheme = useCallback((newTheme: ThemeMode) => {
@@ -143,23 +144,10 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       const applyTheme = () => {
           root.classList.remove('light', 'dark');
-          
-          if (theme === 'system') {
-              const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-              root.classList.add(systemTheme);
-          } else {
-              root.classList.add(theme);
-          }
+          root.classList.add(theme);
       };
 
       applyTheme();
-
-      if (theme === 'system') {
-          const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-          const handleChange = () => applyTheme();
-          mediaQuery.addEventListener('change', handleChange);
-          return () => mediaQuery.removeEventListener('change', handleChange);
-      }
   }, [theme]);
 
   // Handle Browser Back/Forward Buttons
