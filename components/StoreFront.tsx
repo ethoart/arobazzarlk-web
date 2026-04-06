@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useShop, Page } from '../context/ShopContext';
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
-import { Product, PaymentMethod, OrderStatus, LinkType, HeroBanner, Order } from '../types';
+import { Product, PaymentMethod, OrderStatus, LinkType, HeroBanner, Order, PaymentGatewayConfig } from '../types';
 import * as db from '../services/db';
 import * as web3 from '../services/web3';
 import { uploadToLocal } from '../services/ipfs';
 import md5 from 'crypto-js/md5';
-import { ShoppingBag, Star, X, Plus, Minus, CreditCard, Banknote, Truck, Heart, ArrowRight, ArrowLeft, Search, Menu, Lock, AlertCircle, CheckCircle, User, Wallet, Phone, Zap, Maximize2, Send, Landmark, Mail, MapPin, Loader2, UploadCloud, Trash2 } from 'lucide-react';
+import { ShoppingBag, Star, X, Plus, Minus, CreditCard, Banknote, Truck, Heart, ArrowRight, ArrowLeft, Search, Menu, Lock, AlertCircle, CheckCircle, User, Wallet, Phone, Zap, Maximize2, Send, Landmark, Mail, MapPin, Loader2, UploadCloud, Trash2, Moon, Sun, Monitor } from 'lucide-react';
 
 // --- SEO Helper ---
 const SeoManager: React.FC<{ title: string; description?: string }> = ({ title, description }) => {
@@ -48,13 +48,23 @@ const getContrastColor = (hex: string) => {
     return yiq >= 128 ? 'black' : 'white';
 };
 
-const Logo: React.FC<{ src?: string; className?: string; fallbackClass?: string }> = ({ src, className, fallbackClass }) => {
+const Logo: React.FC<{ src?: string; darkSrc?: string; forceDark?: boolean; className?: string; fallbackClass?: string }> = ({ src, darkSrc, forceDark, className, fallbackClass }) => {
+    const { theme } = useShop();
     const [error, setError] = useState(false);
-    const validSrc = useMemo(() => db.getOptimizedImage(src, 200), [src]);
+    
+    const isDark = forceDark || theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const activeSrc = isDark && darkSrc ? darkSrc : src;
+
+    const validSrc = useMemo(() => db.getOptimizedImage(activeSrc, 200), [activeSrc]);
     
     useEffect(() => { setError(false); }, [validSrc]);
 
     if (validSrc && !error) {
+        // If we are forcing dark mode (like in the footer) and we don't have a darkSrc, 
+        // we might need to invert the light logo. But we can let the parent handle that via className.
+        // However, if we DO have a darkSrc, we shouldn't invert it.
+        // To make it simple, the parent can just pass className="h-16 w-auto object-contain" and we handle invert?
+        // Actually, let's just let the parent pass the className.
         return <img src={validSrc} alt="Arobazzar Logo" className={className} onError={() => setError(true)} loading="eager" width="100" height="40" style={{minHeight: '40px', objectFit: 'contain'}} />;
     }
     return <span className={fallbackClass || "text-2xl font-display font-black tracking-tighter"}>AROBAZZAR.</span>;
@@ -69,7 +79,7 @@ const Footer: React.FC = () => {
              <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 relative z-10">
                 <div className="col-span-1 md:col-span-2">
                     <div className="mb-6">
-                        <Logo src={settings?.siteLogo} className="h-16 w-auto object-contain brightness-0 invert" fallbackClass="text-4xl font-display font-black tracking-tighter text-white" />
+                        <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} forceDark className={`h-16 w-auto object-contain ${!settings?.siteLogoDark ? 'brightness-0 invert' : ''}`} fallbackClass="text-4xl font-display font-black tracking-tighter text-white" />
                     </div>
                     <p className="text-gray-400 text-lg max-w-md mb-8">
                         The future of retail. We curate the extraordinary for the digital generation. Premium quality, verified authenticity, delivered worldwide.
@@ -94,9 +104,10 @@ const Footer: React.FC = () => {
                     </ul>
                 </div>
              </div>
-             <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm font-medium">
+             <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm font-medium gap-4 text-center md:text-left">
                 <div>&copy; 2024 Arobazzar Inc. • <a href="https://arobazzar.lk" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" aria-label="Visit Website">arobazzar.lk</a></div>
-                <div className="flex flex-col md:flex-row items-center gap-6 mt-4 md:mt-0">
+                <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+                    <span className="text-xs md:text-sm">We accept Visa, Mastercard, Google Pay, HelaPay & all PayHere options</span>
                     <span className="flex items-center gap-2"><Lock size={12}/> Secure Payment</span>
                 </div>
              </div>
@@ -113,7 +124,7 @@ const ContactPage: React.FC = () => {
             <nav className="fixed top-0 inset-x-0 z-40 py-6 px-6 bg-white/80 backdrop-blur-md" role="navigation">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <button onClick={() => navigateTo('HOME')} className="hover:scale-105 transition-transform" aria-label="Go to Home">
-                         <Logo src={settings?.siteLogo} className="h-10 w-auto" />
+                         <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-10 w-auto" />
                     </button>
                     <button onClick={() => navigateTo('HOME')} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-black hover:text-white transition-all" aria-label="Close Contact Page"><X size={20}/></button>
                 </div>
@@ -161,7 +172,7 @@ const PrivacyPolicy: React.FC = () => {
              <nav className="fixed top-0 inset-x-0 z-40 py-6 px-6 bg-white/80 backdrop-blur-md" role="navigation">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <button onClick={() => navigateTo('HOME')} className="hover:scale-105 transition-transform" aria-label="Go Home">
-                         <Logo src={settings?.siteLogo} className="h-10 w-auto" />
+                         <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-10 w-auto" />
                     </button>
                     <button onClick={() => navigateTo('HOME')} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-black hover:text-white transition-all" aria-label="Close"><X size={20}/></button>
                 </div>
@@ -186,7 +197,7 @@ const TermsOfService: React.FC = () => {
              <nav className="fixed top-0 inset-x-0 z-40 py-6 px-6 bg-white/80 backdrop-blur-md" role="navigation">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <button onClick={() => navigateTo('HOME')} className="hover:scale-105 transition-transform" aria-label="Go Home">
-                         <Logo src={settings?.siteLogo} className="h-10 w-auto" />
+                         <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-10 w-auto" />
                     </button>
                     <button onClick={() => navigateTo('HOME')} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-black hover:text-white transition-all" aria-label="Close"><X size={20}/></button>
                 </div>
@@ -211,7 +222,7 @@ const PaymentPolicy: React.FC = () => {
              <nav className="fixed top-0 inset-x-0 z-40 py-6 px-6 bg-white/80 backdrop-blur-md" role="navigation">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <button onClick={() => navigateTo('HOME')} className="hover:scale-105 transition-transform" aria-label="Go Home">
-                         <Logo src={settings?.siteLogo} className="h-10 w-auto" />
+                         <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-10 w-auto" />
                     </button>
                     <button onClick={() => navigateTo('HOME')} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-black hover:text-white transition-all" aria-label="Close"><X size={20}/></button>
                 </div>
@@ -236,7 +247,7 @@ const ReturnPolicy: React.FC = () => {
              <nav className="fixed top-0 inset-x-0 z-40 py-6 px-6 bg-white/80 backdrop-blur-md" role="navigation">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <button onClick={() => navigateTo('HOME')} className="hover:scale-105 transition-transform" aria-label="Go Home">
-                         <Logo src={settings?.siteLogo} className="h-10 w-auto" />
+                         <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-10 w-auto" />
                     </button>
                     <button onClick={() => navigateTo('HOME')} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-black hover:text-white transition-all" aria-label="Close"><X size={20}/></button>
                 </div>
@@ -277,7 +288,7 @@ const LoginPage: React.FC = () => {
             <nav className="fixed top-0 inset-x-0 z-40 py-6 px-6 bg-white/80 backdrop-blur-md" role="navigation">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <button onClick={() => navigateTo('HOME')} className="hover:scale-105 transition-transform" aria-label="Go Home">
-                         <Logo src={settings?.siteLogo} className="h-10 w-auto" />
+                         <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-10 w-auto" />
                     </button>
                     <button onClick={() => navigateTo('HOME')} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-black hover:text-white transition-all" aria-label="Close"><X size={20}/></button>
                 </div>
@@ -325,7 +336,7 @@ const UserProfile: React.FC = () => {
              <nav className="fixed top-0 inset-x-0 z-40 py-6 px-6 bg-white/80 backdrop-blur-md" role="navigation">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <button onClick={() => navigateTo('HOME')} className="hover:scale-105 transition-transform" aria-label="Go Home">
-                         <Logo src={settings?.siteLogo} className="h-10 w-auto" />
+                         <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-10 w-auto" />
                     </button>
                     <button onClick={() => navigateTo('HOME')} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-black hover:text-white transition-all" aria-label="Close"><X size={20}/></button>
                 </div>
@@ -375,7 +386,7 @@ const UserProfile: React.FC = () => {
 };
 
 const ProductCard: React.FC<{ product: Product; onOpen: (p: Product) => void }> = ({ product, onOpen }) => {
-  const { addToCart } = useShop();
+  const { addToCart, settings } = useShop();
   const [isHovered, setIsHovered] = useState(false);
   const [activeImgIndex, setActiveImgIndex] = useState(0);
 
@@ -384,6 +395,8 @@ const ProductCard: React.FC<{ product: Product; onOpen: (p: Product) => void }> 
   const images = useMemo(() => product.images && product.images.length > 0 ? product.images : [PLACEHOLDER_IMG], [product.images]);
   const mainImage = images[activeImgIndex] || images[0];
   const hasDiscount = product.discountPrice && product.discountPrice < product.price;
+  const isKokoEnabled = settings?.paymentGateways?.find((g: PaymentGatewayConfig) => g.id === PaymentMethod.KOKO)?.enabled;
+  const currentPrice = hasDiscount ? product.discountPrice! : product.price;
 
   // Predictively pre-fetch high-res images on hover
   const handleMouseEnter = useCallback(() => {
@@ -402,11 +415,11 @@ const ProductCard: React.FC<{ product: Product; onOpen: (p: Product) => void }> 
 
   return (
     <div className="group cursor-pointer flex flex-col gap-4" onMouseEnter={handleMouseEnter} onMouseLeave={() => setIsHovered(false)} onClick={() => onOpen(product)} role="article" aria-label={`View ${product.name}`}>
-      <div className="relative aspect-square bg-gray-100 rounded-[2rem] overflow-hidden transition-all duration-500 shadow-sm group-hover:shadow-xl border border-gray-100 transform-gpu">
-        <div className="absolute top-4 right-4 z-10 p-2 bg-white/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-sm"><Heart size={20} className="text-black" /></div>
-        {product.stock < 5 && <div className="absolute top-4 left-4 z-10 px-3 py-1 bg-red-500 text-white text-xs font-bold uppercase rounded-full tracking-wider">Low Stock</div>}
-        {hasDiscount && <div className="absolute top-4 left-4 z-10 px-3 py-1 bg-black text-white text-xs font-bold uppercase rounded-full tracking-wider">SALE</div>}
-        {product.isTrending && !hasDiscount && <div className="absolute bottom-4 left-4 z-10 px-3 py-1 bg-indigo-600 text-white text-xs font-bold uppercase rounded-full tracking-wider flex items-center gap-1"><Star size={10} fill="currentColor" /> Trending</div>}
+      <div className="relative aspect-square bg-gray-100 dark:bg-gray-800 rounded-3xl overflow-hidden transition-all duration-500 shadow-sm group-hover:shadow-2xl border border-gray-200 dark:border-gray-700 transform-gpu">
+        <div className="absolute top-4 right-4 z-10 p-2 bg-white/90 dark:bg-black/90 backdrop-blur-sm rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-sm"><Heart size={20} className="text-black dark:text-white" /></div>
+        {product.stock < 5 && <div className="absolute top-4 left-4 z-10 px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase rounded-full tracking-widest shadow-sm">Low Stock</div>}
+        {hasDiscount && <div className="absolute top-4 left-4 z-10 px-3 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-black uppercase rounded-full tracking-widest shadow-sm">SALE</div>}
+        {product.isTrending && !hasDiscount && <div className="absolute bottom-4 left-4 z-10 px-3 py-1 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-full tracking-widest flex items-center gap-1 shadow-sm"><Star size={10} fill="currentColor" /> Trending</div>}
         
         <img 
           src={db.getOptimizedImage(mainImage, 400)} 
@@ -422,31 +435,40 @@ const ProductCard: React.FC<{ product: Product; onOpen: (p: Product) => void }> 
           alt={product.name} 
           loading="lazy" 
           decoding="async" 
-          className={`w-full h-full object-cover object-center transition-transform duration-700 ease-out transform-gpu will-change-transform ${isHovered ? 'scale-110' : 'scale-100'}`} 
+          className={`w-full h-full object-cover object-center transition-transform duration-700 ease-out transform-gpu will-change-transform ${isHovered ? 'scale-105' : 'scale-100'}`} 
           referrerPolicy="no-referrer"
         />
         
         <div className={`absolute inset-x-0 bottom-0 p-4 transform transition-all duration-300 ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
-             <Button onClick={(e) => { e.stopPropagation(); addToCart(product, product.colors?.[0], product.sizes?.[0]); }} className="w-full py-3 text-sm shadow-xl" aria-label={`Add ${product.name} to cart`}>Add to Cart</Button>
+             <Button onClick={(e) => { e.stopPropagation(); addToCart(product, product.colors?.[0], product.sizes?.[0]); }} className="w-full py-3 text-sm shadow-xl backdrop-blur-md bg-black/90 dark:bg-white/90 text-white dark:text-black" aria-label={`Add ${product.name} to cart`}>Add to Cart</Button>
         </div>
       </div>
-      <div className="space-y-1 px-2">
-        <div className="flex justify-between items-start"><h3 className="font-bold text-lg leading-tight group-hover:underline decoration-2 underline-offset-4 line-clamp-1">{product.name}</h3>
-            <div className="flex flex-col items-end">
+      <div className="space-y-1.5 px-2">
+        <div className="flex justify-between items-start gap-4">
+            <h3 className="font-bold text-lg leading-tight group-hover:underline decoration-2 underline-offset-4 line-clamp-2 text-gray-900 dark:text-gray-100">{product.name}</h3>
+            <div className="flex flex-col items-end shrink-0">
                 {hasDiscount ? (
                     <>
-                        <span className="font-bold text-lg text-red-600 whitespace-nowrap">LKR {product.discountPrice?.toFixed(2)}</span>
-                        <span className="text-xs text-gray-400 line-through">LKR {product.price.toFixed(2)}</span>
+                        <span className="font-black text-lg text-red-600 dark:text-red-400 whitespace-nowrap">LKR {product.discountPrice?.toFixed(2)}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 line-through font-medium">LKR {product.price.toFixed(2)}</span>
                     </>
                 ) : (
-                    <span className="font-bold text-lg whitespace-nowrap">LKR {product.price.toFixed(2)}</span>
+                    <span className="font-black text-lg text-gray-900 dark:text-gray-100 whitespace-nowrap">LKR {product.price.toFixed(2)}</span>
                 )}
             </div>
         </div>
-        <p className="text-gray-400 text-sm font-medium line-clamp-1">{product.category}</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm font-medium line-clamp-1">{product.category}</p>
         
+        {isKokoEnabled && (
+            <div className="flex items-center gap-1.5 mt-2 bg-pink-50/50 dark:bg-pink-900/20 w-fit px-2 py-1 rounded-lg border border-pink-100 dark:border-pink-900/50">
+                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pay in 3 with</span>
+                <span className="font-black text-xs text-pink-600 dark:text-pink-400 tracking-tight">Koko</span>
+                <span className="text-[10px] font-bold text-pink-600 dark:text-pink-400 ml-1">LKR {(currentPrice / 3).toFixed(2)}</span>
+            </div>
+        )}
+
         {product.colors && product.colors.length > 0 && (
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-1.5 mt-3">
                 {product.colors.slice(0, 5).map((c, i) => (
                     <button 
                         key={i} 
@@ -500,8 +522,9 @@ const ReviewForm: React.FC<{ productId: string; onReviewAdded: () => void }> = (
     );
 };
 
-const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> = ({ product, onClose }) => {
-  const { addToCart, notify } = useShop();
+const ProductDetailsPage: React.FC = () => {
+  const { products, selectedProductId, addToCart, notify, settings, navigateTo } = useShop();
+  const product = products.find(p => p.id === selectedProductId) || null;
   const [activeImg, setActiveImg] = useState(0);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -528,53 +551,70 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
     setZoomImgLoaded(false);
   }, [activeImg]);
 
-  if (!product) return null;
+  if (!product) return <div className="py-20 text-center font-bold text-gray-500">Product not found</div>;
   const activeImageSrc = images[activeImg] || images[0];
   
   const handleAddToCart = () => {
     if (product.colors && product.colors.length > 0 && !selectedColor) { notify("Please select a color", "error"); return; }
     if (product.sizes && product.sizes.length > 0 && !selectedSize) { notify("Please select a size", "error"); return; }
-    addToCart(product, selectedColor || undefined, selectedSize || undefined); onClose();
+    addToCart(product, selectedColor || undefined, selectedSize || undefined);
+  };
+
+  const handleBuyNow = () => {
+    if (product.colors && product.colors.length > 0 && !selectedColor) { notify("Please select a color", "error"); return; }
+    if (product.sizes && product.sizes.length > 0 && !selectedSize) { notify("Please select a size", "error"); return; }
+    addToCart(product, selectedColor || undefined, selectedSize || undefined);
+    navigateTo('CHECKOUT');
   };
 
   const hasDiscount = product.discountPrice && product.discountPrice < product.price;
   const percentOff = hasDiscount ? Math.round(((product.price - (product.discountPrice || 0)) / product.price) * 100) : 0;
+  const isKokoEnabled = settings?.paymentGateways?.find((g: PaymentGatewayConfig) => g.id === PaymentMethod.KOKO)?.enabled;
+  const currentPrice = hasDiscount ? product.discountPrice! : product.price;
 
   return (
-    <>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-12">
         <SeoManager title={product.name} description={product.description.substring(0, 150)} />
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in p-0 md:p-6" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-product-name">
-        <div className="bg-white w-full h-[100dvh] md:h-full md:max-h-[90vh] md:rounded-[3rem] rounded-none overflow-hidden shadow-2xl relative flex flex-col md:flex-row animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <button onClick={onClose} className="absolute top-6 right-6 z-30 p-2 bg-white/80 hover:bg-white rounded-full transition-colors shadow-lg" aria-label="Close Modal"><X size={24}/></button>
-            <div className="flex-1 overflow-y-auto flex flex-col md:flex-row pb-32 md:pb-0">
-                <div className="w-full md:w-1/2 bg-gray-50 md:p-12 relative flex flex-col items-center justify-center md:min-h-full transition-colors">
-                    <div className="w-full h-[55vh] md:h-auto md:aspect-square md:max-w-md md:rounded-[2.5rem] overflow-hidden md:shadow-[0_20px_50px_rgba(0,0,0,0.1)] bg-white cursor-zoom-in relative group flex items-center justify-center md:ring-1 md:ring-gray-100" onClick={() => setIsZoomed(true)}>
-                        <div className={`absolute inset-0 bg-gray-200 animate-pulse z-0 ${imgLoaded ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}></div>
-                        <img 
-                            key={activeImageSrc}
-                            src={db.getOptimizedImage(activeImageSrc, 800)} 
-                            onLoad={() => setImgLoaded(true)}
-                            onError={(e) => { 
-                                const target = e.currentTarget;
-                                target.onerror = null; 
-                                if (target.src.includes('wsrv.nl') && activeImageSrc && !activeImageSrc.includes('wsrv.nl')) {
-                                    target.src = activeImageSrc;
-                                } else if (target.src !== PLACEHOLDER_IMG) {
-                                    target.src = PLACEHOLDER_IMG;
-                                    setImgLoaded(true);
-                                }
-                            }} 
-                            className={`w-full h-full object-cover transition-all duration-500 ease-out transform-gpu bg-gray-50 relative z-10`}
-                            referrerPolicy="no-referrer" 
-                            alt={product.name} 
-                            loading="eager" 
-                            decoding="async"
-                        />
-                        <div className="absolute top-6 right-6 bg-black/5 p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm transform translate-y-2 group-hover:translate-y-0 z-20 hidden md:block"><Maximize2 size={24} className="text-black"/></div>
+        <div className="bg-white dark:bg-[#0a0a0a] w-full rounded-3xl shadow-sm relative flex flex-col md:flex-row items-start">
+            <div className="w-full md:w-1/2 bg-gray-50 dark:bg-gray-900/50 p-6 md:p-12 relative flex flex-col items-center transition-colors md:sticky md:top-32">
+                <div className="w-full h-[55vh] md:h-auto md:aspect-square md:max-w-md md:rounded-[2.5rem] overflow-hidden md:shadow-[0_20px_50px_rgba(0,0,0,0.1)] bg-white dark:bg-gray-800 cursor-zoom-in relative group flex items-center justify-center md:ring-1 md:ring-gray-100 dark:md:ring-gray-800" onClick={() => setIsZoomed(true)}>
+                        <div className={`absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse z-0 ${imgLoaded ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}></div>
+                        {product.video && activeImg === 0 ? (
+                            <video 
+                                src={product.video} 
+                                autoPlay 
+                                loop 
+                                muted 
+                                playsInline
+                                className="w-full h-full object-cover transition-all duration-500 ease-out transform-gpu bg-gray-50 dark:bg-gray-800 relative z-10"
+                            />
+                        ) : (
+                            <img 
+                                key={activeImageSrc}
+                                src={db.getOptimizedImage(activeImageSrc, 800)} 
+                                onLoad={() => setImgLoaded(true)}
+                                onError={(e) => { 
+                                    const target = e.currentTarget;
+                                    target.onerror = null; 
+                                    if (target.src.includes('wsrv.nl') && activeImageSrc && !activeImageSrc.includes('wsrv.nl')) {
+                                        target.src = activeImageSrc;
+                                    } else if (target.src !== PLACEHOLDER_IMG) {
+                                        target.src = PLACEHOLDER_IMG;
+                                        setImgLoaded(true);
+                                    }
+                                }} 
+                                className={`w-full h-full object-cover transition-all duration-500 ease-out transform-gpu bg-gray-50 dark:bg-gray-800 relative z-10`}
+                                referrerPolicy="no-referrer" 
+                                alt={product.name} 
+                                loading="eager" 
+                                decoding="async"
+                            />
+                        )}
+                        <div className="absolute top-6 right-6 bg-black/5 dark:bg-white/5 p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm transform translate-y-2 group-hover:translate-y-0 z-20 hidden md:block"><Maximize2 size={24} className="text-black dark:text-white"/></div>
                     </div>
-                    <div className="flex gap-3 overflow-x-auto max-w-full py-4 w-full justify-center hide-scrollbar px-4 bg-gray-50 md:bg-transparent">
+                    <div className="flex gap-3 overflow-x-auto max-w-full py-4 w-full justify-center hide-scrollbar px-4 bg-gray-50 dark:bg-transparent md:bg-transparent">
                         {images.map((img, idx) => (
-                            <button key={idx} onClick={() => setActiveImg(idx)} className={`relative w-16 h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden flex-shrink-0 transition-all duration-300 ease-out border-2 transform-gpu will-change-transform ${activeImg === idx ? 'border-black shadow-lg scale-105 opacity-100' : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105 hover:border-gray-200'}`} aria-label={`View image ${idx + 1}`}>
+                            <button key={idx} onClick={() => setActiveImg(idx)} className={`relative w-16 h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden flex-shrink-0 transition-all duration-300 ease-out border-2 transform-gpu will-change-transform ${activeImg === idx ? 'border-black dark:border-white shadow-lg scale-105 opacity-100' : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105 hover:border-gray-200 dark:hover:border-gray-700'}`} aria-label={`View image ${idx + 1}`}>
                                 <img 
                                     src={db.getOptimizedImage(img, 150)} 
                                     className="w-full h-full object-cover" 
@@ -595,28 +635,36 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
                         ))}
                     </div>
                 </div>
-                <div className="w-full md:w-1/2 p-6 md:p-12 bg-white">
+                <div className="w-full md:w-1/2 p-6 md:p-12 bg-white dark:bg-[#0a0a0a]">
                     <div className="flex items-center gap-2 mb-4">
-                        <span className="px-3 py-1 bg-black text-white text-xs font-bold uppercase rounded-full">In Stock</span>
-                        <span className="text-gray-400 font-bold text-sm uppercase tracking-wider">{product.category}</span>
-                        {product.isTrending && <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold uppercase rounded-full">Trending</span>}
-                        {hasDiscount && <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold uppercase rounded-full">{percentOff}% OFF</span>}
+                        <span className="px-3 py-1 bg-black dark:bg-white text-white dark:text-black text-xs font-bold uppercase rounded-full">In Stock</span>
+                        <span className="text-gray-400 dark:text-gray-500 font-bold text-sm uppercase tracking-wider">{product.category}</span>
+                        {product.isTrending && <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-bold uppercase rounded-full">Trending</span>}
+                        {hasDiscount && <span className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold uppercase rounded-full">{percentOff}% OFF</span>}
                     </div>
-                    <h2 id="modal-product-name" className="text-3xl md:text-5xl font-display font-black leading-tight mb-4">{product.name}</h2>
-                    <div className="mb-6 flex items-baseline gap-4">
+                    <h2 id="modal-product-name" className="text-3xl md:text-5xl font-display font-black leading-tight mb-4 text-gray-900 dark:text-white">{product.name}</h2>
+                    <div className="mb-4 flex items-baseline gap-4">
                         {hasDiscount ? (
                             <>
-                                <span className="text-3xl font-bold text-red-600">LKR {product.discountPrice?.toFixed(2)}</span>
-                                <span className="text-xl text-gray-400 line-through">LKR {product.price.toFixed(2)}</span>
+                                <span className="text-3xl font-bold text-red-600 dark:text-red-400">LKR {product.discountPrice?.toFixed(2)}</span>
+                                <span className="text-xl text-gray-400 dark:text-gray-500 line-through">LKR {product.price.toFixed(2)}</span>
                             </>
                         ) : (
-                            <span className="text-3xl font-bold text-black">LKR {(product.price || 0).toFixed(2)}</span>
+                            <span className="text-3xl font-bold text-black dark:text-white">LKR {(product.price || 0).toFixed(2)}</span>
                         )}
                     </div>
+
+                    {isKokoEnabled && (
+                        <div className="flex items-center gap-2 mb-6 bg-pink-50/50 dark:bg-pink-900/20 w-fit px-3 py-2 rounded-xl border border-pink-100 dark:border-pink-900/50">
+                            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pay in 3 with</span>
+                            <span className="font-black text-sm text-pink-600 dark:text-pink-400 tracking-tight">Koko</span>
+                            <span className="text-xs font-bold text-pink-600 dark:text-pink-400 ml-1">LKR {(currentPrice / 3).toFixed(2)}</span>
+                        </div>
+                    )}
                     
                     {product.colors && product.colors.length > 0 && (
                         <div className="mb-6">
-                            <span className="block text-sm font-bold uppercase tracking-wider text-gray-400 mb-3">Select Color</span>
+                            <span className="block text-sm font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">Select Color</span>
                             <div className="flex flex-wrap gap-3">
                                 {product.colors.map((color, idx) => (
                                     <button 
@@ -625,7 +673,7 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
                                             setSelectedColor(color);
                                             if (idx < images.length) setActiveImg(idx);
                                         }} 
-                                        className={`px-4 py-2 rounded-lg border-2 text-sm font-bold flex items-center gap-2 transition-all ${selectedColor === color ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-black'}`}
+                                        className={`px-4 py-2 rounded-lg border-2 text-sm font-bold flex items-center gap-2 transition-all ${selectedColor === color ? 'border-black dark:border-white bg-black dark:bg-white text-white dark:text-black' : 'border-gray-200 dark:border-gray-800 hover:border-black dark:hover:border-white text-gray-900 dark:text-gray-100'}`}
                                         aria-label={`Select color ${color}`}
                                         aria-pressed={selectedColor === color}
                                     >
@@ -639,13 +687,13 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
 
                     {product.sizes && product.sizes.length > 0 && (
                          <div className="mb-6">
-                            <span className="block text-sm font-bold uppercase tracking-wider text-gray-400 mb-3">Select Size</span>
+                            <span className="block text-sm font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">Select Size</span>
                             <div className="flex flex-wrap gap-3">
                                 {product.sizes.map((size) => (
                                     <button 
                                         key={size} 
                                         onClick={() => setSelectedSize(size)}
-                                        className={`w-12 h-12 flex items-center justify-center rounded-lg border-2 text-sm font-bold transition-all ${selectedSize === size ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-black'}`}
+                                        className={`w-12 h-12 flex items-center justify-center rounded-lg border-2 text-sm font-bold transition-all ${selectedSize === size ? 'border-black dark:border-white bg-black dark:bg-white text-white dark:text-black' : 'border-gray-200 dark:border-gray-800 hover:border-black dark:hover:border-white text-gray-900 dark:text-gray-100'}`}
                                         aria-label={`Select size ${size}`}
                                         aria-pressed={selectedSize === size}
                                     >
@@ -656,24 +704,24 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
                         </div>
                     )}
 
-                    <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-8 font-medium">{product.description}</p>
-                    <div className="hidden md:block mb-12"><Button onClick={handleAddToCart} className="w-full text-lg h-16">Add to Cart</Button></div>
-                    <div className="border-t border-gray-100 pt-8">
-                        <h3 className="font-bold text-xl mb-6">Reviews</h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-base md:text-lg leading-relaxed mb-8 font-medium">{product.description}</p>
+                    <div className="flex flex-col sm:flex-row gap-4 mb-12">
+                        <Button onClick={handleAddToCart} variant="outline" className="flex-1 text-lg h-14 sm:h-16 border-2 border-black dark:border-white text-black dark:text-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black">Add to Cart</Button>
+                        <Button onClick={handleBuyNow} className="flex-1 text-lg h-14 sm:h-16">Buy Now</Button>
+                    </div>
+                    <div className="border-t border-gray-100 dark:border-gray-800 pt-8">
+                        <h3 className="font-bold text-xl mb-6 text-gray-900 dark:text-white">Reviews</h3>
                         <div className="mb-8"><ReviewForm productId={product.id} onReviewAdded={() => { }} /></div>
                         <div className="space-y-6 mb-8 max-h-64 overflow-y-auto">
                             {product.reviews && product.reviews.length > 0 ? product.reviews.map(r => (
-                                <div key={r.id} className="bg-gray-50 p-4 rounded-2xl">
-                                    <div className="flex justify-between items-center mb-2"><span className="font-bold">{r.user}</span><div className="flex text-yellow-400">{[...Array(5)].map((_, i) => <Star key={i} size={14} fill={i < r.rating ? "currentColor" : "none"} />)}</div></div>
-                                    <p className="text-gray-600 text-sm">{r.comment}</p><p className="text-xs text-gray-400 mt-2">{r.date}</p>
+                                <div key={r.id} className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl">
+                                    <div className="flex justify-between items-center mb-2"><span className="font-bold text-gray-900 dark:text-white">{r.user}</span><div className="flex text-yellow-400">{[...Array(5)].map((_, i) => <Star key={i} size={14} fill={i < r.rating ? "currentColor" : "none"} />)}</div></div>
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">{r.comment}</p><p className="text-xs text-gray-400 dark:text-gray-500 mt-2">{r.date}</p>
                                 </div>
-                            )) : <p className="text-gray-400 italic">No reviews yet. Be the first!</p>}
+                            )) : <p className="text-gray-400 dark:text-gray-500 italic">No reviews yet. Be the first!</p>}
                         </div>
                     </div>
                 </div>
-            </div>
-            <div className="md:hidden absolute bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-lg border-t border-gray-100 z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] pb-8"><Button onClick={handleAddToCart} className="w-full text-lg h-14 shadow-2xl z-50 relative">Add to Cart</Button></div>
-        </div>
         </div>
         
         {isZoomed && (
@@ -701,7 +749,7 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void }> =
                 />
             </div>
         )}
-    </>
+    </div>
   );
 };
 
@@ -918,6 +966,11 @@ const CheckoutPage: React.FC = () => {
             } else if (paymentMethod === PaymentMethod.PAYPAL) {
                 txHash = transactionRef;
                 initialStatus = OrderStatus.PROCESSING; // PayPal payment successful
+            } else if (paymentMethod === PaymentMethod.KOKO || paymentMethod === PaymentMethod.INSTALLMENTS) {
+                // Simulate redirect to payment gateway
+                notify(`Redirecting to ${paymentMethod === PaymentMethod.KOKO ? 'Koko' : 'Installment Provider'}...`, "info");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                initialStatus = OrderStatus.PROCESSING; // Assume successful after redirect simulation
             } else { 
                 await new Promise(resolve => setTimeout(resolve, 1500)); 
             }
@@ -945,56 +998,56 @@ const CheckoutPage: React.FC = () => {
     const paypalClientId = paypalGateway?.paypalClientId;
 
     const orderSummary = (
-        <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-gray-100 h-fit sticky top-8">
-            <h4 className="font-display font-black text-gray-900 mb-6 uppercase tracking-tight text-xl">Order Summary</h4>
-            <div className="space-y-4 mb-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-xl shadow-gray-200/50 border border-gray-100 h-fit sticky top-24">
+            <h4 className="font-display font-black text-gray-900 mb-8 uppercase tracking-tight text-2xl">Order Summary</h4>
+            <div className="space-y-5 mb-8 max-h-[45vh] overflow-y-auto pr-2 custom-scrollbar">
                 {cart.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center gap-4">
+                    <div key={idx} className="flex justify-between items-center gap-4 group">
                         <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 border border-gray-50">
-                                <img src={db.getOptimizedImage(item.images?.[0], 100)} alt={item.name} className="w-full h-full object-cover" />
+                            <div className="w-20 h-20 bg-gray-50 rounded-2xl overflow-hidden flex-shrink-0 border border-gray-100 group-hover:border-gray-200 transition-colors">
+                                <img src={db.getOptimizedImage(item.images?.[0], 100)} alt={item.name} className="w-full h-full object-cover mix-blend-multiply" />
                             </div>
-                            <div className="flex flex-col">
-                                <p className="font-bold text-gray-900 leading-tight line-clamp-1">{item.name}</p>
-                                <p className="text-xs text-gray-500 mt-1 font-medium">
+                            <div className="flex flex-col gap-1">
+                                <p className="font-bold text-gray-900 leading-tight line-clamp-2 text-sm">{item.name}</p>
+                                <p className="text-xs text-gray-500 font-medium">
                                     Qty: {item.quantity} 
-                                    {item.selectedSize ? ` | ${item.selectedSize}` : ''} 
-                                    {item.selectedColor ? ` | ${item.selectedColor}` : ''}
+                                    {item.selectedSize ? ` • ${item.selectedSize}` : ''} 
+                                    {item.selectedColor ? ` • ${item.selectedColor}` : ''}
                                 </p>
                             </div>
                         </div>
-                        <span className="font-bold text-gray-900 whitespace-nowrap">LKR {(item.price * item.quantity).toFixed(2)}</span>
+                        <span className="font-black text-gray-900 whitespace-nowrap">LKR {(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                 ))}
             </div>
             
-            <div className="space-y-3 pt-6 border-t border-gray-100">
-                <div className="flex justify-between text-gray-500 font-medium"><span>Subtotal</span><span>LKR {subTotal.toFixed(2)}</span></div>
-                <div className="flex justify-between text-gray-500 font-medium"><span>Delivery</span><span>LKR {deliveryCharge.toFixed(2)}</span></div>
+            <div className="space-y-4 text-sm font-medium border-t border-gray-100 pt-6">
+                <div className="flex justify-between text-gray-500"><span>Subtotal</span><span className="text-gray-900 font-bold">LKR {subTotal.toFixed(2)}</span></div>
+                <div className="flex justify-between text-gray-500"><span>Delivery</span><span className="text-gray-900 font-bold">LKR {deliveryCharge.toFixed(2)}</span></div>
                 {discountApplied && (
-                    <div className="flex justify-between text-green-600 font-bold bg-green-50 p-2 rounded-lg">
+                    <div className="flex justify-between text-green-600 font-bold bg-green-50 p-3 rounded-xl">
                         <span>Discount ({discountApplied.code})</span>
                         <span>- LKR {discountApplied.amount.toFixed(2)}</span>
                     </div>
                 )}
-                <div className="border-t border-gray-100 mt-4 pt-4">
+                <div className="border-t border-gray-100 mt-4 pt-6">
                     <div className="flex justify-between items-end">
-                        <span className="text-gray-500 font-bold uppercase text-xs tracking-widest mb-1">Total Amount</span>
-                        <span className="font-display font-black text-gray-900 text-3xl tracking-tight">LKR {finalTotal.toFixed(2)}</span>
+                        <span className="text-gray-400 font-black uppercase text-xs tracking-widest mb-1">Total</span>
+                        <span className="font-display font-black text-gray-900 text-4xl tracking-tighter">LKR {finalTotal.toFixed(2)}</span>
                     </div>
                 </div>
             </div>
 
             <div className="mt-8 pt-6 border-t border-gray-100">
-                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-3 ml-1">Have a coupon?</label>
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 md:mb-3 ml-1">Promo Code</label>
                 <div className="flex gap-2">
                     <input 
-                        placeholder="CODE" 
-                        className="flex-1 bg-gray-50 border-2 border-transparent focus:border-black p-3 rounded-xl font-bold text-sm outline-none uppercase transition-all" 
+                        placeholder="Enter code" 
+                        className="flex-1 bg-gray-50 border-2 border-transparent focus:border-black p-3 md:p-4 rounded-xl md:rounded-2xl font-bold text-sm outline-none uppercase transition-all" 
                         value={couponCode} 
                         onChange={e => setCouponCode(e.target.value.toUpperCase())} 
                     />
-                    <button onClick={handleApplyCoupon} className="bg-black text-white px-5 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors uppercase tracking-wider">Apply</button>
+                    <button onClick={handleApplyCoupon} className="bg-black text-white px-4 md:px-6 rounded-xl md:rounded-2xl font-bold text-sm hover:bg-gray-800 transition-colors uppercase tracking-wider shadow-lg">Apply</button>
                 </div>
             </div>
         </div>
@@ -1003,8 +1056,8 @@ const CheckoutPage: React.FC = () => {
     return (
         <PayPalScriptProvider options={{ "clientId": paypalClientId || "sb", currency: "USD", intent: "capture" }}>
             {showWalletSelector && <WalletSelectionModal onClose={() => setShowWalletSelector(false)} onSelect={handleWalletSelect} />}
-            <div className="max-w-7xl mx-auto pt-16 md:pt-28 pb-12 px-4 md:px-8 animate-fade-in">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="max-w-7xl mx-auto pt-24 md:pt-36 pb-12 px-4 md:px-8 animate-fade-in">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                     {/* Left Side: Order Summary */}
                     <div className="lg:col-span-5 order-1 lg:order-1">
                         {orderSummary}
@@ -1012,57 +1065,57 @@ const CheckoutPage: React.FC = () => {
 
                     {/* Right Side: Forms */}
                     <div className="lg:col-span-7 order-2 lg:order-2">
-                        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
-                            <div className="p-6 md:p-8 border-b border-gray-100 bg-white shrink-0">
-                                <h2 className="text-lg md:text-2xl font-display font-black uppercase tracking-tight">
+                        <div className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden flex flex-col h-full">
+                            <div className="p-6 md:p-10 border-b border-gray-100 bg-white shrink-0">
+                                <h2 className="text-2xl md:text-3xl font-display font-black uppercase tracking-tight">
                                     Checkout
                                 </h2>
                             </div>
-                            <div className="flex-1 p-6 md:p-8 bg-gray-50/50 overflow-y-auto">
+                            <div className="flex-1 p-6 md:p-10 bg-gray-50/30 overflow-y-auto">
                                 <div className="space-y-8">
                                     {checkoutStep === 'DETAILS' ? (
-                                        <div className="space-y-6 animate-fade-in">
-                                            <div className="flex items-center justify-between mb-2">
+                                        <div className="space-y-8 animate-fade-in">
+                                            <div className="flex items-center justify-between mb-4">
                                                 <div className="text-sm font-bold uppercase tracking-wider text-gray-400 pl-2">1. Customer Details</div>
-                                                <div className="text-[10px] font-bold bg-blue-100 text-blue-600 px-2 py-1 rounded-full uppercase">Step 1 of 2</div>
+                                                <div className="text-[10px] font-bold bg-black text-white px-3 py-1 rounded-full uppercase tracking-widest">Step 1 of 2</div>
                                             </div>
-                                            <div className="space-y-4">
-                                                <div className="space-y-1">
+                                            <div className="space-y-5">
+                                                <div className="space-y-1.5">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Full Name *</label>
-                                                    <input placeholder="Enter your full name" type="text" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} aria-label="Full Name"/>
+                                                    <input placeholder="Enter your full name" type="text" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} aria-label="Full Name" autoComplete="name"/>
                                                 </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div className="space-y-1">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                                    <div className="space-y-1.5">
                                                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Address *</label>
-                                                        <input placeholder="email@example.com" type="email" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} aria-label="Email"/>
+                                                        <input placeholder="email@example.com" type="email" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} aria-label="Email" autoComplete="email"/>
                                                     </div>
-                                                    <div className="space-y-1">
+                                                    <div className="space-y-1.5">
                                                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Phone Number *</label>
-                                                        <input placeholder="+94 7X XXX XXXX" type="tel" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} aria-label="Phone"/>
+                                                        <input placeholder="+94 7X XXX XXXX" type="tel" className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} aria-label="Phone" autoComplete="tel"/>
                                                     </div>
                                                 </div>
-                                                <div className="space-y-1">
+                                                <div className="space-y-1.5">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Shipping Address *</label>
-                                                    <textarea placeholder="House No, Street, City, etc." className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-xl font-medium text-base outline-none transition-all shadow-sm" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} aria-label="Address"></textarea>
+                                                    <textarea placeholder="House No, Street, City, etc." className="w-full bg-white border-2 border-transparent focus:border-black p-4 rounded-2xl font-medium text-base outline-none transition-all shadow-sm resize-none" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} aria-label="Address" autoComplete="street-address"></textarea>
                                                 </div>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="space-y-6 animate-fade-in">
-                                            <div className="flex items-center justify-between mb-2">
+                                        <div className="space-y-8 animate-fade-in">
+                                            <div className="flex items-center justify-between mb-4">
                                                 <button 
                                                     onClick={() => setCheckoutStep('DETAILS')}
-                                                    className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-wider"
+                                                    className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-black transition-colors uppercase tracking-wider"
                                                 >
-                                                    <ArrowLeft size={14} /> Edit Details
+                                                    <ArrowLeft size={16} /> Edit Details
                                                 </button>
-                                                <div className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-1 rounded-full uppercase">Step 2 of 2</div>
+                                                <div className="text-[10px] font-bold bg-black text-white px-3 py-1 rounded-full uppercase tracking-widest">Step 2 of 2</div>
                                             </div>
                                             
-                                            <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 mb-6">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">Shipping To:</div>
-                                                <div className="text-sm font-bold text-gray-900">{formData.name}</div>
-                                                <div className="text-xs text-gray-500 mt-1">{formData.address}</div>
+                                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm mb-8 flex flex-col gap-1">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Shipping To:</div>
+                                                <div className="text-base font-bold text-gray-900">{formData.name}</div>
+                                                <div className="text-sm text-gray-500">{formData.address}</div>
                                             </div>
 
                                             <div className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4 pl-2">2. Payment Method</div>
@@ -1081,6 +1134,27 @@ const CheckoutPage: React.FC = () => {
                                                                         </div>
                                                                         <div>
                                                                             <div className="font-bold text-base md:text-lg">{m.id === PaymentMethod.PAYHERE ? 'Card / Google Pay / Apple Pay (PayHere)' : m.nameOverride || m.id}</div>
+                                                                            <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                ); 
+                                                            })}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Buy Now, Pay Later */}
+                                                    {availableMethods.some(m => m.id === PaymentMethod.KOKO || m.id === PaymentMethod.INSTALLMENTS) && (
+                                                        <div className="space-y-3">
+                                                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Buy Now, Pay Later</h4>
+                                                            {availableMethods.filter(m => m.id === PaymentMethod.KOKO || m.id === PaymentMethod.INSTALLMENTS).map(m => { 
+                                                                const isSelected = paymentMethod === m.id; 
+                                                                return (
+                                                                    <div key={m.id} onClick={() => setPaymentMethod(m.id)} className={`flex items-center gap-4 p-4 md:p-6 rounded-2xl cursor-pointer border-2 transition-all shadow-sm ${isSelected ? 'border-pink-600 bg-pink-50/50' : 'border-transparent bg-white hover:border-gray-200'}`}>
+                                                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${m.id === PaymentMethod.KOKO ? 'bg-pink-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                                                            {m.id === PaymentMethod.KOKO ? <span className="font-black text-xs tracking-tighter">KOKO</span> : <CreditCard size={24}/>}
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="font-bold text-base md:text-lg">{m.nameOverride || m.id}</div>
                                                                             <div className="text-xs md:text-sm text-gray-500">{m.instructions}</div>
                                                                         </div>
                                                                     </div>
@@ -1369,13 +1443,35 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
 
             <div id="shop" className="max-w-7xl mx-auto px-6 mb-12">
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                    <h2 className="text-2xl font-display font-black">Latest Drops</h2>
+                    <h2 className="text-2xl font-display font-black text-gray-900 dark:text-white">Latest Drops</h2>
                     <div className="flex gap-2 overflow-x-auto hide-scrollbar py-4 -mx-6 px-8 md:mx-0 md:px-2" role="tablist">
-                        {topCategories.map(cat => (<button key={cat} onClick={() => setActiveCategory(cat)} role="tab" aria-selected={activeCategory === cat} className={`px-6 py-3 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 flex-shrink-0 min-w-[4rem] ${activeCategory === cat ? 'bg-black text-white shadow-lg scale-105' : 'bg-white text-gray-500 hover:bg-gray-200'}`}>{cat}</button>))}
+                        {topCategories.map(cat => (
+                            <button 
+                                key={cat} 
+                                onClick={() => setActiveCategory(cat)} 
+                                className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${activeCategory === cat ? 'bg-black dark:bg-white text-white dark:text-black shadow-md' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                                role="tab"
+                                aria-selected={activeCategory === cat}
+                            >
+                                {cat}
+                            </button>
+                        ))}
                     </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{displayProducts.map(product => (<ProductCard key={product.id} product={product} onOpen={onProductClick} />))}</div>
-                <div className="mt-12 text-center"><Button variant="outline" onClick={() => navigateTo('SHOP')}>View All Products</Button></div>
+                {displayProducts.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {displayProducts.map(product => (<ProductCard key={product.id} product={product} onOpen={onProductClick} />))}
+                    </div>
+                ) : (
+                    <div className="text-center py-24 bg-gray-50 dark:bg-gray-900/50 rounded-[2rem]">
+                        <p className="text-gray-500 dark:text-gray-400 font-medium">No products found in this category.</p>
+                    </div>
+                )}
+                {filteredProducts.length > 8 && (
+                    <div className="mt-12 text-center">
+                        <Button variant="outline" onClick={() => navigateTo('SHOP')} className="px-8 border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800">View All Products</Button>
+                    </div>
+                )}
             </div>
             
             {settings?.middleBanner && (
@@ -1424,7 +1520,7 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
             
             {settings?.watchSection && (
                  <div className="max-w-7xl mx-auto px-6 mb-20">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-0 rounded-[2.5rem] overflow-hidden bg-gray-50 shadow-sm border border-gray-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-0 rounded-[2.5rem] overflow-hidden bg-gray-50 dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800">
                         <div 
                             className="h-[300px] md:h-[600px] relative group overflow-hidden cursor-pointer transform-gpu"
                             onClick={() => handleBannerClick(settings.watchSection?.linkType, settings.watchSection?.linkValue)}
@@ -1448,15 +1544,15 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                                 <p className="text-white/80 font-medium">Precision meets luxury.</p>
                             </div>
                         </div>
-                        <div className="h-auto md:h-[600px] p-8 md:p-12 flex flex-col bg-white">
+                        <div className="h-auto md:h-[600px] p-8 md:p-12 flex flex-col bg-white dark:bg-[#0a0a0a]">
                              <div className="flex justify-between items-end mb-8">
-                                <div><h3 className="text-2xl font-display font-black text-gray-900 mb-1">Exclusive Timepieces</h3><p className="text-gray-400 text-sm font-bold uppercase tracking-wider">Curated Collection</p></div>
-                                <button onClick={() => navigateTo('SHOP')} className="text-sm font-bold border-b-2 border-black pb-1 hover:text-gray-600 transition-colors">See All</button>
+                                <div><h3 className="text-2xl font-display font-black text-gray-900 dark:text-white mb-1">Exclusive Timepieces</h3><p className="text-gray-400 dark:text-gray-500 text-sm font-bold uppercase tracking-wider">Curated Collection</p></div>
+                                <button onClick={() => navigateTo('SHOP')} className="text-sm font-bold border-b-2 border-black dark:border-white pb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-gray-900 dark:text-white">See All</button>
                              </div>
                              <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                                 {(settings.watchSectionProductIds?.length ? products.filter(p => settings.watchSectionProductIds!.includes(p.id)) : products.filter(p => p.category === 'Fashion').slice(0, 5)).map(p => (
-                                    <div key={p.id} onClick={() => onProductClick(p)} className="flex gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group border border-transparent hover:border-gray-100">
-                                        <div className="w-20 h-20 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                                    <div key={p.id} onClick={() => onProductClick(p)} className="flex gap-4 p-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors cursor-pointer group border border-transparent hover:border-gray-100 dark:hover:border-gray-800">
+                                        <div className="w-20 h-20 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
                                             <img 
                                                 src={db.getOptimizedImage(p.images?.[0], 150)} 
                                                 onError={(e) => { 
@@ -1473,14 +1569,14 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                                             />
                                         </div>
                                         <div className="flex-1">
-                                            <h5 className="font-bold text-gray-900 line-clamp-1">{p.name}</h5>
-                                            <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-2">{p.category}</p>
-                                            <div className="flex justify-between items-center"><span className="font-bold">LKR {(p.price || 0).toFixed(2)}</span><div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors"><ArrowRight size={14}/></div></div>
+                                            <h5 className="font-bold text-gray-900 dark:text-white line-clamp-1">{p.name}</h5>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-2">{p.category}</p>
+                                            <div className="flex justify-between items-center"><span className="font-bold text-gray-900 dark:text-white">LKR {(p.price || 0).toFixed(2)}</span><div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center group-hover:bg-black dark:group-hover:bg-white group-hover:text-white dark:group-hover:text-black transition-colors"><ArrowRight size={14}/></div></div>
                                         </div>
                                     </div>
                                 ))}
                              </div>
-                             <div className="mt-8 pt-6 border-t border-gray-100"><Button className="w-full" onClick={() => navigateTo('SHOP')}>View More Watches</Button></div>
+                             <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800"><Button className="w-full" onClick={() => navigateTo('SHOP')}>View More Watches</Button></div>
                         </div>
                     </div>
                  </div>
@@ -1489,8 +1585,8 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
             {settings?.fashionSection && (
                  <div className="max-w-7xl mx-auto px-6 mb-20">
                      <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
-                        <div><span className="text-sm font-bold text-indigo-600 uppercase tracking-widest mb-2 block">{settings.fashionSection.subtitle}</span><h3 className="text-3xl md:text-5xl font-display font-black">{settings.fashionSection.title}</h3></div>
-                        <Button variant="outline" onClick={() => navigateTo('SHOP')} className="md:w-auto w-full">Shop Collection</Button>
+                        <div><span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-2 block">{settings.fashionSection.subtitle}</span><h3 className="text-3xl md:text-5xl font-display font-black text-gray-900 dark:text-white">{settings.fashionSection.title}</h3></div>
+                        <Button variant="outline" onClick={() => navigateTo('SHOP')} className="md:w-auto w-full border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800">Shop Collection</Button>
                      </div>
                      <div className="relative overflow-x-auto hide-scrollbar -mx-6 px-6 md:mx-0 md:px-0">
                          <div className="flex gap-6 pb-8">
@@ -1517,7 +1613,7 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                              </div>
                              {products.filter(p => p.category === 'Fashion').slice(0, 6).map(p => (
                                  <div key={p.id} onClick={() => onProductClick(p)} className="min-w-[260px] md:min-w-[280px] group cursor-pointer">
-                                     <div className="aspect-[3/4] bg-gray-100 rounded-[2rem] overflow-hidden mb-4 relative transform-gpu">
+                                     <div className="aspect-[3/4] bg-gray-100 dark:bg-gray-800 rounded-[2rem] overflow-hidden mb-4 relative transform-gpu">
                                         <img 
                                             src={db.getOptimizedImage(p.images?.[0], 400)} 
                                             onError={(e) => { 
@@ -1532,11 +1628,11 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                                             decoding="async"
                                             alt={p.name}
                                         />
-                                        <div className="absolute top-4 right-4 bg-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><ArrowRight size={16} /></div>
+                                        <div className="absolute top-4 right-4 bg-white dark:bg-gray-900 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><ArrowRight size={16} className="text-gray-900 dark:text-white" /></div>
                                     </div>
-                                     <h5 className="font-bold text-lg leading-tight">{p.name}</h5>
-                                     <p className="text-gray-500 text-sm">{p.category}</p>
-                                     <div className="font-bold mt-1">LKR {(p.price || 0).toFixed(2)}</div>
+                                     <h5 className="font-bold text-lg leading-tight text-gray-900 dark:text-white">{p.name}</h5>
+                                     <p className="text-gray-500 dark:text-gray-400 text-sm">{p.category}</p>
+                                     <div className="font-bold mt-1 text-gray-900 dark:text-white">LKR {(p.price || 0).toFixed(2)}</div>
                                  </div>
                              ))}
                          </div>
@@ -1544,11 +1640,11 @@ const HomePage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
                  </div>
             )}
             
-            <div className="bg-white text-gray-900 border-t border-gray-100 py-20 px-6 rounded-t-[3rem] -mb-20 relative z-10">
+            <div className="bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-white border-t border-gray-100 dark:border-gray-800 py-20 px-6 rounded-t-[3rem] -mb-20 relative z-10 transition-colors">
                 <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
-                    <div className="flex flex-col items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center text-black mb-2"><Banknote size={32} /></div><h4 className="text-xl font-bold">Cash on Delivery</h4><p className="text-gray-500 text-sm max-w-xs">Pay conveniently with cash when your order arrives at your doorstep.</p></div>
-                    <div className="flex flex-col items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center text-blue-600 mb-2"><Zap size={32} /></div><h4 className="text-xl font-bold">Crypto Payments</h4><p className="text-gray-500 text-sm max-w-xs">Secure, instant payments via Base Chain using ETH or USDC.</p></div>
-                    <div className="flex flex-col items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center text-green-600 mb-2"><Truck size={32} /></div><h4 className="text-xl font-bold">Fast Delivery</h4><p className="text-gray-500 text-sm max-w-xs">Expedited shipping options to get your gear to you in record time.</p></div>
+                    <div className="flex flex-col items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center text-black dark:text-white mb-2"><Banknote size={32} /></div><h4 className="text-xl font-bold">Cash on Delivery</h4><p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs">Pay conveniently with cash when your order arrives at your doorstep.</p></div>
+                    <div className="flex flex-col items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2"><Zap size={32} /></div><h4 className="text-xl font-bold">Crypto Payments</h4><p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs">Secure, instant payments via Base Chain using ETH or USDC.</p></div>
+                    <div className="flex flex-col items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center text-green-600 dark:text-green-400 mb-2"><Truck size={32} /></div><h4 className="text-xl font-bold">Fast Delivery</h4><p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs">Expedited shipping options to get your gear to you in record time.</p></div>
                 </div>
             </div>
         </div>
@@ -1585,27 +1681,27 @@ const ShopPage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onProduc
         <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-fade-in min-h-screen">
             <SeoManager title="Shop" description="Explore our full collection of premium products." />
             <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-                <div><h1 className="text-5xl font-display font-black mb-2">Shop All</h1><p className="text-gray-400 font-medium">Browse our full collection of premium items.</p></div>
-                <div className="relative w-full md:w-96"><Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Search products..." className="w-full bg-white border-2 border-gray-100 focus:border-black rounded-full py-4 pl-12 pr-6 outline-none transition-all shadow-sm" value={filter} onChange={e => setFilter(e.target.value)} aria-label="Search Products"/></div>
+                <div><h1 className="text-5xl font-display font-black mb-2 text-gray-900 dark:text-white">Shop All</h1><p className="text-gray-400 dark:text-gray-500 font-medium">Browse our full collection of premium items.</p></div>
+                <div className="relative w-full md:w-96"><Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" /><input type="text" placeholder="Search products..." className="w-full bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-white border-2 border-gray-100 dark:border-gray-800 focus:border-black dark:focus:border-white rounded-full py-4 pl-12 pr-6 outline-none transition-all shadow-sm" value={filter} onChange={e => setFilter(e.target.value)} aria-label="Search Products"/></div>
             </div>
             
             <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-6 mb-2" role="tablist">
                 {parentCategories.map(cat => (
-                    <button key={cat} onClick={() => { setActiveCategory(cat); setActiveSubCategory(null); }} role="tab" aria-selected={activeCategory === cat} className={`px-6 py-3 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 flex-shrink-0 border-2 ${activeCategory === cat ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-transparent hover:border-gray-200'}`}>{cat}</button>
+                    <button key={cat} onClick={() => { setActiveCategory(cat); setActiveSubCategory(null); }} role="tab" aria-selected={activeCategory === cat} className={`px-6 py-3 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 flex-shrink-0 border-2 ${activeCategory === cat ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white' : 'bg-white dark:bg-[#0a0a0a] text-gray-500 dark:text-gray-400 border-transparent hover:border-gray-200 dark:hover:border-gray-800'}`}>{cat}</button>
                 ))}
             </div>
 
             {currentSubCategories.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-6 mb-2 animate-slide-up">
-                    <button onClick={() => setActiveSubCategory(null)} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${!activeSubCategory ? 'bg-gray-200 text-black' : 'bg-gray-50 text-gray-500 hover:bg-gray-200'}`}>All {activeCategory}</button>
+                    <button onClick={() => setActiveSubCategory(null)} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${!activeSubCategory ? 'bg-gray-200 dark:bg-gray-800 text-black dark:text-white' : 'bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'}`}>All {activeCategory}</button>
                     {currentSubCategories.map(sub => (
-                        <button key={sub.id} onClick={() => setActiveSubCategory(sub.name)} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${activeSubCategory === sub.name ? 'bg-black text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-200'}`}>{sub.name}</button>
+                        <button key={sub.id} onClick={() => setActiveSubCategory(sub.name)} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${activeSubCategory === sub.name ? 'bg-black dark:bg-white text-white dark:text-black' : 'bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'}`}>{sub.name}</button>
                     ))}
                 </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {filtered.length > 0 ? filtered.map(product => <ProductCard key={product.id} product={product} onOpen={onProductClick} />) : <div className="col-span-full text-center py-20 text-gray-400 font-medium">No products found.</div>}
+                {filtered.length > 0 ? filtered.map(product => <ProductCard key={product.id} product={product} onOpen={onProductClick} />) : <div className="col-span-full text-center py-20 text-gray-400 dark:text-gray-500 font-medium">No products found.</div>}
             </div>
         </div>
     );
@@ -1618,15 +1714,14 @@ const TrendingPage: React.FC<{ onProductClick: (p: Product) => void }> = ({ onPr
     return (
         <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-fade-in min-h-screen">
              <SeoManager title="Trending" description="See what's hot right now on Arobazzar." />
-             <div className="text-center mb-16"><h1 className="text-5xl md:text-7xl font-display font-black mb-6">Trending</h1><p className="text-gray-400 font-medium text-lg max-w-2xl mx-auto">Items that are flying off the digital shelves.</p></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{trendingProducts.length > 0 ? trendingProducts.map(product => (<ProductCard key={product.id} product={product} onOpen={onProductClick} />)) : (<div className="col-span-full text-center py-20 text-gray-400 font-bold">No trending items yet.</div>)}</div>
+             <div className="text-center mb-16"><h1 className="text-5xl md:text-7xl font-display font-black mb-6 text-gray-900 dark:text-white">Trending</h1><p className="text-gray-400 dark:text-gray-500 font-medium text-lg max-w-2xl mx-auto">Items that are flying off the digital shelves.</p></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{trendingProducts.length > 0 ? trendingProducts.map(product => (<ProductCard key={product.id} product={product} onOpen={onProductClick} />)) : (<div className="col-span-full text-center py-20 text-gray-400 dark:text-gray-500 font-bold">No trending items yet.</div>)}</div>
         </div>
     );
 };
 
 export const StoreFront: React.FC = () => {
-  const { cart, removeFromCart, updateCartQuantity, navigateTo, currentPage, settings } = useShop();
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const { cart, removeFromCart, updateCartQuantity, navigateTo, currentPage, settings, theme, setTheme } = useShop();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1648,89 +1743,91 @@ export const StoreFront: React.FC = () => {
   const handleMobileNav = (page: Page) => { navigateTo(page); setIsMobileMenuOpen(false); };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <nav className={`fixed top-0 inset-x-0 z-40 transition-all duration-500 ${isScrolled ? 'bg-white/90 backdrop-blur-lg shadow-sm py-4' : 'bg-transparent py-6'}`} role="navigation" aria-label="Main Navigation">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] flex flex-col">
+      <nav className={`fixed top-0 inset-x-0 z-40 transition-all duration-500 ${isScrolled ? 'bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-lg shadow-sm py-4' : 'bg-transparent py-6'}`} role="navigation" aria-label="Main Navigation">
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
             <div className="flex items-center gap-4">
                 <button className="md:hidden" onClick={() => setIsMobileMenuOpen(true)} aria-label="Open Menu"><Menu size={24}/></button>
                 <button onClick={() => navigateTo('HOME')} className="cursor-pointer flex items-center gap-2" aria-label="Go to Home">
-                    <Logo src={settings?.siteLogo} className="h-14 w-auto object-contain" fallbackClass="text-2xl font-display font-black tracking-tighter" />
+                    <Logo src={settings?.siteLogo} darkSrc={settings?.siteLogoDark} className="h-14 w-auto object-contain" fallbackClass="text-2xl font-display font-black tracking-tighter" />
                 </button>
             </div>
             {currentPage !== 'CHECKOUT' && (
-                <div className="hidden md:flex gap-8 font-bold text-sm text-gray-400">
-                    <button onClick={() => navigateTo('HOME')} className={`transition-colors ${currentPage === 'HOME' ? 'text-black' : 'hover:text-black'}`}>Home</button>
-                    <button onClick={() => navigateTo('SHOP')} className={`transition-colors ${currentPage === 'SHOP' ? 'text-black' : 'hover:text-black'}`}>Shop</button>
-                    <button onClick={() => navigateTo('TRENDING')} className={`transition-colors ${currentPage === 'TRENDING' ? 'text-black' : 'hover:text-black'}`}>Trending</button>
-                    <button onClick={() => navigateTo('CONTACT')} className="transition-colors hover:text-black">Contact</button>
+                <div className="hidden md:flex gap-8 font-bold text-sm text-gray-400 dark:text-gray-500">
+                    <button onClick={() => navigateTo('HOME')} className={`transition-colors ${currentPage === 'HOME' ? 'text-black dark:text-white' : 'hover:text-black dark:hover:text-white'}`}>Home</button>
+                    <button onClick={() => navigateTo('SHOP')} className={`transition-colors ${currentPage === 'SHOP' ? 'text-black dark:text-white' : 'hover:text-black dark:hover:text-white'}`}>Shop</button>
+                    <button onClick={() => navigateTo('TRENDING')} className={`transition-colors ${currentPage === 'TRENDING' ? 'text-black dark:text-white' : 'hover:text-black dark:hover:text-white'}`}>Trending</button>
+                    <button onClick={() => navigateTo('CONTACT')} className="transition-colors hover:text-black dark:hover:text-white">Contact</button>
                 </div>
             )}
             <div className="flex items-center gap-4">
-                 <button onClick={() => navigateTo('PROFILE')} className="p-3 rounded-full hover:bg-gray-100 transition-colors" aria-label="My Profile"><User size={20} /></button>
-                <button onClick={() => setIsCartOpen(true)} className="relative group bg-white/80 p-3 rounded-full shadow-sm hover:shadow-md transition-all hover:bg-black hover:text-white" aria-label="Open Cart"><ShoppingBag size={20} />{cart.length > 0 && (<span className="absolute -top-1 -right-1 bg-black text-white group-hover:bg-white group-hover:text-black text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white animate-scale-in">{cart.reduce((a, b) => a + b.quantity, 0)}</span>)}</button>
+                 <button onClick={() => setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark')} className="p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Toggle Theme">
+                    {theme === 'dark' ? <Moon size={20} /> : theme === 'light' ? <Sun size={20} /> : <Monitor size={20} />}
+                 </button>
+                 <button onClick={() => navigateTo('PROFILE')} className="p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="My Profile"><User size={20} /></button>
+                <button onClick={() => setIsCartOpen(true)} className="relative group bg-white/80 dark:bg-gray-800/80 p-3 rounded-full shadow-sm hover:shadow-md transition-all hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" aria-label="Open Cart"><ShoppingBag size={20} />{cart.length > 0 && (<span className="absolute -top-1 -right-1 bg-black text-white dark:bg-white dark:text-black group-hover:bg-white group-hover:text-black dark:group-hover:bg-black dark:group-hover:text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-gray-800 animate-scale-in">{cart.reduce((a, b) => a + b.quantity, 0)}</span>)}</button>
             </div>
         </div>
       </nav>
 
       <div className={`fixed inset-0 z-50 bg-black/50 backdrop-blur-sm transition-opacity duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)}>
-        <div className={`absolute top-0 left-0 w-3/4 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center"><span className="text-2xl font-display font-black tracking-tighter">MENU</span><button onClick={() => setIsMobileMenuOpen(false)} aria-label="Close Menu"><X size={24}/></button></div>
-            <div className="flex-1 p-6 flex flex-col gap-6 font-bold text-lg">
+        <div className={`absolute top-0 left-0 w-3/4 max-w-xs h-full bg-white dark:bg-[#0a0a0a] shadow-2xl transform transition-transform duration-300 flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center"><span className="text-2xl font-display font-black tracking-tighter text-gray-900 dark:text-white">MENU</span><button onClick={() => setIsMobileMenuOpen(false)} aria-label="Close Menu" className="text-gray-900 dark:text-white"><X size={24}/></button></div>
+            <div className="flex-1 p-6 flex flex-col gap-6 font-bold text-lg text-gray-900 dark:text-white">
                 {currentPage !== 'CHECKOUT' && (
                     <>
-                        <button onClick={() => handleMobileNav('HOME')} className="text-left hover:text-gray-500">Home</button>
-                        <button onClick={() => handleMobileNav('SHOP')} className="text-left hover:text-gray-500">Shop All</button>
-                        <button onClick={() => handleMobileNav('TRENDING')} className="text-left hover:text-gray-500">Trending</button>
+                        <button onClick={() => handleMobileNav('HOME')} className="text-left hover:text-gray-500 dark:hover:text-gray-400">Home</button>
+                        <button onClick={() => handleMobileNav('SHOP')} className="text-left hover:text-gray-500 dark:hover:text-gray-400">Shop All</button>
+                        <button onClick={() => handleMobileNav('TRENDING')} className="text-left hover:text-gray-500 dark:hover:text-gray-400">Trending</button>
                     </>
                 )}
-                <button onClick={() => handleMobileNav('PROFILE')} className="text-left hover:text-gray-500">My Profile</button>
+                <button onClick={() => handleMobileNav('PROFILE')} className="text-left hover:text-gray-500 dark:hover:text-gray-400">My Profile</button>
                 {currentPage !== 'CHECKOUT' && (
-                    <button onClick={() => handleMobileNav('CONTACT')} className="text-left hover:text-gray-500">Contact Us</button>
+                    <button onClick={() => handleMobileNav('CONTACT')} className="text-left hover:text-gray-500 dark:hover:text-gray-400">Contact Us</button>
                 )}
-                <div className="border-t border-gray-100 my-2"></div>
-                <button onClick={() => { setIsMobileMenuOpen(false); setIsCartOpen(true); }} className="text-left hover:text-gray-500 flex items-center gap-2">Cart <span className="bg-black text-white text-xs px-2 py-1 rounded-full">{cart.length}</span></button>
+                <div className="border-t border-gray-100 dark:border-gray-800 my-2"></div>
+                <button onClick={() => { setIsMobileMenuOpen(false); setIsCartOpen(true); }} className="text-left hover:text-gray-500 dark:hover:text-gray-400 flex items-center gap-2">Cart <span className="bg-black dark:bg-white text-white dark:text-black text-xs px-2 py-1 rounded-full">{cart.length}</span></button>
             </div>
-            <div className="p-6 bg-gray-50 text-xs text-gray-400 font-bold uppercase tracking-wider">&copy; 2024 Arobazzar</div>
+            <div className="p-6 bg-gray-50 dark:bg-gray-900/50 text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">&copy; 2024 Arobazzar</div>
         </div>
       </div>
 
       <main className="flex-1">
-          {currentPage === 'HOME' && <HomePage onProductClick={setSelectedProduct} />}
-          {currentPage === 'SHOP' && <ShopPage onProductClick={setSelectedProduct} />}
-          {currentPage === 'TRENDING' && <TrendingPage onProductClick={setSelectedProduct} />}
+          {currentPage === 'HOME' && <HomePage onProductClick={(p) => navigateTo('PRODUCT_DETAILS', { productId: p.id })} />}
+          {currentPage === 'SHOP' && <ShopPage onProductClick={(p) => navigateTo('PRODUCT_DETAILS', { productId: p.id })} />}
+          {currentPage === 'TRENDING' && <TrendingPage onProductClick={(p) => navigateTo('PRODUCT_DETAILS', { productId: p.id })} />}
           {currentPage === 'CHECKOUT' && <CheckoutPage />}
+          {currentPage === 'PRODUCT_DETAILS' && <ProductDetailsPage />}
       </main>
 
       <Footer />
 
       <div className={`fixed inset-0 z-50 bg-black/20 backdrop-blur-sm transition-opacity duration-500 ${isCartOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsCartOpen(false)} role="dialog" aria-label="Shopping Cart">
-        <div onClick={(e) => e.stopPropagation()} className={`absolute right-0 top-0 h-full w-full md:w-[500px] bg-white shadow-2xl transform transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) flex flex-col ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white z-10"><h2 className="text-3xl font-display font-black tracking-tight flex items-center gap-3">Bag <span className="text-sm bg-black text-white px-2 py-1 rounded-md font-sans font-bold">{cart.length}</span></h2><button onClick={() => setIsCartOpen(false)} className="w-10 h-10 hover:bg-gray-100 rounded-full flex items-center justify-center transition-colors" aria-label="Close Cart"><X size={20}/></button></div>
+        <div onClick={(e) => e.stopPropagation()} className={`absolute right-0 top-0 h-full w-full md:w-[500px] bg-white dark:bg-[#0a0a0a] shadow-2xl transform transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) flex flex-col ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className="p-8 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-[#0a0a0a] z-10"><h2 className="text-3xl font-display font-black tracking-tight flex items-center gap-3 text-gray-900 dark:text-white">Bag <span className="text-sm bg-black dark:bg-white text-white dark:text-black px-2 py-1 rounded-md font-sans font-bold">{cart.length}</span></h2><button onClick={() => setIsCartOpen(false)} className="w-10 h-10 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full flex items-center justify-center transition-colors text-gray-900 dark:text-white" aria-label="Close Cart"><X size={20}/></button></div>
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {cart.length === 0 ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4"><ShoppingBag size={80} className="opacity-10" /><p className="font-bold text-lg">Your bag is empty.</p><Button variant="outline" onClick={() => { setIsCartOpen(false); navigateTo('SHOP'); }}>Start Shopping</Button></div>) : (cart.map(item => (
+                {cart.length === 0 ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 space-y-4"><ShoppingBag size={80} className="opacity-10" /><p className="font-bold text-lg">Your bag is empty.</p><Button variant="outline" onClick={() => { setIsCartOpen(false); navigateTo('SHOP'); }} className="border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800">Start Shopping</Button></div>) : (cart.map(item => (
                         <div key={`${item.id}-${item.selectedColor}-${item.selectedSize}`} className="flex gap-4 animate-fade-in group">
-                            <div className="w-24 h-24 bg-gray-100 rounded-2xl flex-shrink-0 p-2 overflow-hidden border border-gray-100">
+                            <div className="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-2xl flex-shrink-0 p-2 overflow-hidden border border-gray-100 dark:border-gray-800">
                                 <img src={db.getOptimizedImage(item.images?.[0], 150)} onError={(e) => { const target = e.currentTarget; target.onerror = null; if (target.src.includes('wsrv.nl') && item.images?.[0]) target.src = item.images[0]; else target.src = PLACEHOLDER_IMG; }} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
                             </div>
                             <div className="flex-1 flex flex-col justify-between py-1">
-                                <div><div className="flex justify-between items-start"><h4 className="font-bold text-lg leading-tight mb-1">{item.name}</h4><button onClick={() => removeFromCart(item.id, item.selectedColor, item.selectedSize)} className="text-gray-300 hover:text-red-500 transition-colors" aria-label="Remove item"><X size={18}/></button></div><p className="text-gray-400 text-xs font-bold uppercase tracking-wider">{item.category}</p>
-                                {item.selectedColor && (<div className="flex items-center gap-2 mt-1"><span className="w-3 h-3 rounded-full border border-gray-300" style={{backgroundColor: item.selectedColor.trim()}}></span><span className="text-xs font-medium text-gray-500">{item.selectedColor}</span></div>)}
-                                {item.selectedSize && (<div className="flex items-center gap-2 mt-1"><span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">Size: {item.selectedSize}</span></div>)}
+                                <div><div className="flex justify-between items-start"><h4 className="font-bold text-lg leading-tight mb-1 text-gray-900 dark:text-white">{item.name}</h4><button onClick={() => removeFromCart(item.id, item.selectedColor, item.selectedSize)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors" aria-label="Remove item"><X size={18}/></button></div><p className="text-gray-400 dark:text-gray-500 text-xs font-bold uppercase tracking-wider">{item.category}</p>
+                                {item.selectedColor && (<div className="flex items-center gap-2 mt-1"><span className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600" style={{backgroundColor: item.selectedColor.trim()}}></span><span className="text-xs font-medium text-gray-500 dark:text-gray-400">{item.selectedColor}</span></div>)}
+                                {item.selectedSize && (<div className="flex items-center gap-2 mt-1"><span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">Size: {item.selectedSize}</span></div>)}
                                 </div>
-                                <div className="flex items-center justify-between mt-2"><div className="font-bold text-lg">LKR {(item.discountPrice && item.discountPrice < item.price ? item.discountPrice : item.price).toFixed(2)}</div><div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-full px-2 py-1"><button onClick={() => updateCartQuantity(item.id, -1, item.selectedColor, item.selectedSize)} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><Minus size={14}/></button><span className="text-sm font-bold w-4 text-center">{item.quantity}</span><button onClick={() => updateCartQuantity(item.id, 1, item.selectedColor, item.selectedSize)} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><Plus size={14}/></button></div></div>
+                                <div className="flex items-center justify-between mt-2"><div className="font-bold text-lg text-gray-900 dark:text-white">LKR {(item.discountPrice && item.discountPrice < item.price ? item.discountPrice : item.price).toFixed(2)}</div><div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-full px-2 py-1"><button onClick={() => updateCartQuantity(item.id, -1, item.selectedColor, item.selectedSize)} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-900 dark:text-white"><Minus size={14}/></button><span className="text-sm font-bold w-4 text-center text-gray-900 dark:text-white">{item.quantity}</span><button onClick={() => updateCartQuantity(item.id, 1, item.selectedColor, item.selectedSize)} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-900 dark:text-white"><Plus size={14}/></button></div></div>
                             </div>
                         </div>
                     ))
                 )}
             </div>
-            <div className="p-8 border-t border-gray-100 bg-gray-50">
-                <div className="flex justify-between mb-8 text-3xl font-display font-black tracking-tight mt-4"><span>Total</span><span>LKR {cart.reduce((a, b) => a + ((b.discountPrice && b.discountPrice < b.price ? b.discountPrice : b.price) * b.quantity), 0).toFixed(2)}</span></div>
+            <div className="p-8 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                <div className="flex justify-between mb-8 text-3xl font-display font-black tracking-tight mt-4 text-gray-900 dark:text-white"><span>Total</span><span>LKR {cart.reduce((a, b) => a + ((b.discountPrice && b.discountPrice < b.price ? b.discountPrice : b.price) * b.quantity), 0).toFixed(2)}</span></div>
                 <Button onClick={() => { setIsCartOpen(false); navigateTo('CHECKOUT'); }} className="w-full text-lg py-5" disabled={cart.length === 0}>Checkout <ArrowRight size={20} /></Button>
             </div>
         </div>
       </div>
-
-      <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
     </div>
   );
 };

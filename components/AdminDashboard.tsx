@@ -331,9 +331,10 @@ const CategoryManager: React.FC = () => {
 const ProductManager: React.FC = () => {
     const { products, saveProduct, deleteProduct, notify, categories } = useShop();
     const [newProduct, setNewProduct] = useState<Partial<Product>>({
-        name: '', price: 0, discountPrice: undefined, category: '', subCategory: '', description: '', images: [], stock: 10, isTrending: false, colors: [], sizes: [], tags: []
+        name: '', price: 0, discountPrice: undefined, category: '', subCategory: '', description: '', images: [], video: '', stock: 10, isTrending: false, colors: [], sizes: [], tags: []
     });
     const [imageInput, setImageInput] = useState('');
+    const [videoInput, setVideoInput] = useState('');
     const [colorInput, setColorInput] = useState('');
     const [sizeInput, setSizeInput] = useState('');
     const [tagsInput, setTagsInput] = useState('');
@@ -350,6 +351,7 @@ const ProductManager: React.FC = () => {
     const startEdit = (product: Product) => {
         setNewProduct(product);
         setImageInput((product.images || []).join(', '));
+        setVideoInput(product.video || '');
         setColorInput((product.colors || []).join(', '));
         setSizeInput((product.sizes || []).join(', '));
         setTagsInput((product.tags || []).join(', '));
@@ -429,6 +431,7 @@ const ProductManager: React.FC = () => {
             subCategory: newProduct.subCategory || undefined,
             description: newProduct.description || '',
             images: imgList.length > 0 ? imgList : [PLACEHOLDER_IMG], 
+            video: videoInput.trim() || undefined,
             colors: colorList,
             sizes: sizeList,
             tags: tagsList,
@@ -437,8 +440,9 @@ const ProductManager: React.FC = () => {
             isTrending: newProduct.isTrending || false
         } as Product);
 
-        setNewProduct({ name: '', price: 0, discountPrice: undefined, category: 'Electronics', description: '', images: [], stock: 10, isTrending: false, colors: [], sizes: [], tags: [] });
+        setNewProduct({ name: '', price: 0, discountPrice: undefined, category: 'Electronics', description: '', images: [], video: '', stock: 10, isTrending: false, colors: [], sizes: [], tags: [] });
         setImageInput('');
+        setVideoInput('');
         setColorInput('');
         setSizeInput('');
         setTagsInput('');
@@ -541,6 +545,10 @@ const ProductManager: React.FC = () => {
                                 ))}
                             </div>
                         )}
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Video URL (Optional)</label>
+                        <input className="w-full bg-gray-50 border-transparent focus:border-black focus:bg-white border-2 p-4 rounded-xl font-medium outline-none transition-colors" value={videoInput} onChange={e => setVideoInput(e.target.value)} placeholder="https://example.com/video.mp4" />
                     </div>
                     <div>
                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Colors (Comma Separated)</label>
@@ -982,8 +990,9 @@ const SettingsManager: React.FC = () => {
             <div className="space-y-8 max-w-4xl">
                 <section className="space-y-4">
                     <h4 className="font-bold text-lg border-b pb-2">Branding</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <ImageUploader label="Site Logo" value={localSettings.siteLogo || ''} onChange={(v) => updateField('siteLogo', v)} />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <ImageUploader label="Site Logo (Light Mode)" value={localSettings.siteLogo || ''} onChange={(v) => updateField('siteLogo', v)} />
+                        <ImageUploader label="Site Logo (Dark Mode)" value={localSettings.siteLogoDark || ''} onChange={(v) => updateField('siteLogoDark', v)} />
                         <ImageUploader label="Site Favicon" value={localSettings.siteFavicon || ''} onChange={(v) => updateField('siteFavicon', v)} />
                     </div>
                 </section>
@@ -1219,6 +1228,36 @@ const SettingsManager: React.FC = () => {
                                             <br/>
                                             <span className="text-red-500 font-bold">Note:</span> If testing, use a Sandbox Client ID. If live, use a Live Client ID. Do not mix them.
                                         </p>
+                                    </div>
+                                )}
+
+                                {gw.id === PaymentMethod.KOKO && (
+                                    <div>
+                                        <input 
+                                            className="w-full bg-white p-2 rounded border border-gray-200 text-sm font-mono" 
+                                            placeholder="Koko Merchant ID"
+                                            value={gw.kokoMerchantId || ''}
+                                            onChange={(e) => {
+                                                const newGateways = [...localSettings.paymentGateways];
+                                                newGateways[index] = { ...newGateways[index], kokoMerchantId: e.target.value };
+                                                updateField('paymentGateways', newGateways);
+                                            }}
+                                        />
+                                    </div>
+                                )}
+
+                                {gw.id === PaymentMethod.INSTALLMENTS && (
+                                    <div>
+                                        <input 
+                                            className="w-full bg-white p-2 rounded border border-gray-200 text-sm font-mono" 
+                                            placeholder="Installment Provider Name (e.g., Mintpay, Koko)"
+                                            value={gw.installmentProvider || ''}
+                                            onChange={(e) => {
+                                                const newGateways = [...localSettings.paymentGateways];
+                                                newGateways[index] = { ...newGateways[index], installmentProvider: e.target.value };
+                                                updateField('paymentGateways', newGateways);
+                                            }}
+                                        />
                                     </div>
                                 )}
 

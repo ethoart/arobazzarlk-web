@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { Product, Order, CartItem, OrderStatus, Review, SiteSettings, Notification, Category } from '../types';
 import * as db from '../services/db';
 
-export type Page = 'HOME' | 'SHOP' | 'TRENDING' | 'ADMIN' | 'LOGIN' | 'PRIVACY' | 'TERMS' | 'PROFILE' | 'CONTACT' | 'PAYMENT' | 'RETURN' | 'CHECKOUT';
+export type Page = 'HOME' | 'SHOP' | 'TRENDING' | 'ADMIN' | 'LOGIN' | 'PRIVACY' | 'TERMS' | 'PROFILE' | 'CONTACT' | 'PAYMENT' | 'RETURN' | 'CHECKOUT' | 'PRODUCT_DETAILS';
+export type ThemeMode = 'light' | 'dark' | 'system';
 
 interface ShopContextType {
   products: Product[];
@@ -11,6 +12,7 @@ interface ShopContextType {
   cart: CartItem[];
   settings: SiteSettings | null;
   currentPage: Page;
+  selectedProductId: string | null;
   isLoading: boolean;
   notifications: Notification[];
   userOrderIds: string[];
@@ -32,6 +34,8 @@ interface ShopContextType {
   notify: (message: string, type: 'success' | 'error' | 'info') => void;
   dismissNotification: (id: string) => void;
   validateDiscount: (code: string, cartTotal: number) => { valid: boolean; discount: number; message: string };
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
@@ -64,7 +68,8 @@ const PAGE_TO_ROUTE: Record<Page, string> = {
     'TERMS': '/terms-service',
     'PAYMENT': '/payment-policy',
     'RETURN': '/return-policy',
-    'CHECKOUT': '/checkout'
+    'CHECKOUT': '/checkout',
+    'PRODUCT_DETAILS': '/product'
 };
 
 export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -93,21 +98,69 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.setItem('arobazzar_cart', JSON.stringify(cart));
   }, [cart]);
   
-  // Initialize Page based on URL
   const getInitialPage = (): Page => {
       const path = window.location.pathname;
-      // Handle trailing slashes
       const cleanPath = path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path;
+      if (cleanPath.startsWith('/product/')) {
+          return 'PRODUCT_DETAILS';
+      }
       return ROUTE_MAP[cleanPath] || 'HOME';
   };
 
+  const getInitialProductId = (): string | null => {
+      const path = window.location.pathname;
+      const cleanPath = path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path;
+      if (cleanPath.startsWith('/product/')) {
+          return cleanPath.split('/')[2] || null;
+      }
+      return null;
+  };
+
   const [currentPage, setCurrentPage] = useState<Page>(getInitialPage());
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(getInitialProductId());
   
   // Set initial loading to true to allow App.tsx to show the Site Loader
   const [isLoading, setIsLoading] = useState(true);
   
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [userOrderIds, setUserOrderIds] = useState<string[]>([]);
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+      try {
+          const local = localStorage.getItem('arobazzar_theme');
+          return (local as ThemeMode) || 'system';
+      } catch { return 'system'; }
+  });
+
+  const setTheme = useCallback((newTheme: ThemeMode) => {
+      setThemeState(newTheme);
+      try {
+          localStorage.setItem('arobazzar_theme', newTheme);
+      } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+      const root = window.document.documentElement;
+      
+      const applyTheme = () => {
+          root.classList.remove('light', 'dark');
+          
+          if (theme === 'system') {
+              const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+              root.classList.add(systemTheme);
+          } else {
+              root.classList.add(theme);
+          }
+      };
+
+      applyTheme();
+
+      if (theme === 'system') {
+          const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+          const handleChange = () => applyTheme();
+          mediaQuery.addEventListener('change', handleChange);
+          return () => mediaQuery.removeEventListener('change', handleChange);
+      }
+  }, [theme]);
 
   // Handle Browser Back/Forward Buttons
   useEffect(() => {
@@ -239,15 +292,45 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sessionStorage.setItem('arobazzar_active_category', state.category);
     }
     
-    // Update URL without reload
-    const route = PAGE_TO_ROUTE[page] || '/';
-    if (window.location.pathname !== route) {
-        window.history.pushState({ page }, '', route);
+    if (page === 'PRODUCT_DETAILS' && state && typeof state.productId === 'string') {
+        setSelectedProductId(state.productId);
+        const route = `/product/${state.productId}`;
+        if (window.location.pathname !== route) {
+            window.history.pushState({ page, productId: state.productId }, '', route);
+        }
+    } else {
+        if (page !== 'PRODUCT_DETAILS') setSelectedProductId(null);
+        const route = PAGE_TO_ROUTE[page] || '/';
+        if (window.location.pathname !== route) {
+            window.history.pushState({ page }, '', route);
+        }
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setCurrentPage(page);
   }, []);
+
+  useEffect(() => {
+      if (settings && settings.paymentGateways && !localStorage.getItem('arobazzar_payment_methods_enabled_v4')) {
+          let updated = false;
+          let newSettings = { ...settings };
+
+          if (newSettings.paymentGateways.some(g => !g.enabled)) {
+              newSettings.paymentGateways = newSettings.paymentGateways.map(g => ({ ...g, enabled: true }));
+              updated = true;
+          }
+
+          if (newSettings.discountCodes && newSettings.discountCodes.some(c => c.code.toUpperCase() === 'X402')) {
+              newSettings.discountCodes = newSettings.discountCodes.filter(c => c.code.toUpperCase() !== 'X402');
+              updated = true;
+          }
+
+          if (updated) {
+              updateSiteSettings(newSettings);
+          }
+          localStorage.setItem('arobazzar_payment_methods_enabled_v4', 'true');
+      }
+  }, [settings]);
 
   const addToCart = (product: Product, color?: string, size?: string) => {
     const effectivePrice = (product.discountPrice && product.discountPrice < product.price) 
@@ -437,10 +520,11 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <ShopContext.Provider value={{
-      products, categories, orders, cart, settings, currentPage, isLoading, notifications, userOrderIds,
+      products, categories, orders, cart, settings, currentPage, selectedProductId, isLoading, notifications, userOrderIds,
       navigateTo, addToCart, removeFromCart, updateCartQuantity, clearCart,
       saveProduct, deleteProduct, addCategory, deleteCategory, addOrder, updateOrderStatus, deleteOrder,
-      addReview, deleteReview, updateSiteSettings, notify, dismissNotification, validateDiscount
+      addReview, deleteReview, updateSiteSettings, notify, dismissNotification, validateDiscount,
+      theme, setTheme
     }}>
       {children}
     </ShopContext.Provider>

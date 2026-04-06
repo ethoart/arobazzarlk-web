@@ -6,7 +6,9 @@ export enum PaymentMethod {
   PAYHERE = 'PayHere',
   BASE_ETH = 'Base ETH',
   BASE_USDC = 'Base USDC',
-  BASE_USDT = 'Base USDT'
+  BASE_USDT = 'Base USDT',
+  KOKO = 'Koko',
+  INSTALLMENTS = 'Installments'
 }
 
 export enum OrderStatus {
@@ -41,6 +43,7 @@ export interface Product {
   subCategory?: string; 
   description: string;
   images: string[];
+  video?: string;
   colors?: string[];
   sizes?: string[];
   tags?: string[];
@@ -102,6 +105,8 @@ export interface PaymentGatewayConfig {
   payhereMerchantId?: string;
   payhereSecret?: string;
   payhereEnv?: 'sandbox' | 'live';
+  kokoMerchantId?: string;
+  installmentProvider?: string;
   bankDetails?: BankDetails;
   instructions?: string;
 }
@@ -125,6 +130,7 @@ export interface SiteSettings {
   
   // Brand Identity
   siteLogo?: string;
+  siteLogoDark?: string;
   siteFavicon?: string;
   
   heroTitle: string; 

@@ -103,19 +103,19 @@ const PageRouter: React.FC = () => {
   }, [isLoading]);
 
   return (
-    <div className="relative font-sans text-gray-900 antialiased overflow-hidden min-h-screen">
+    <div className="relative font-sans text-gray-900 dark:text-gray-100 antialiased overflow-hidden min-h-screen">
       <HeadManager />
       <ToastContainer />
       
       {isMounted && (
-          <div className={`fixed inset-0 flex flex-col items-center justify-center bg-white z-[999] transition-all duration-1000 ease-in-out ${isExiting ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100'}`}>
+          <div className={`fixed inset-0 flex flex-col items-center justify-center bg-white dark:bg-[#0a0a0a] z-[999] transition-all duration-1000 ease-in-out ${isExiting ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100'}`}>
               <div className="relative">
-                  <div className="font-display font-black text-5xl tracking-tighter text-black animate-scale-in">AROBAZZAR.</div>
-                  <div className="absolute -bottom-4 left-0 w-full h-1 bg-gray-100 overflow-hidden rounded-full">
-                      <div className="h-full bg-black animate-loading-progress w-full origin-left"></div>
+                  <div className="font-display font-black text-5xl tracking-tighter text-black dark:text-white animate-scale-in">AROBAZZAR.</div>
+                  <div className="absolute -bottom-4 left-0 w-full h-1 bg-gray-100 dark:bg-gray-800 overflow-hidden rounded-full">
+                      <div className="h-full bg-black dark:bg-white animate-loading-progress w-full origin-left"></div>
                   </div>
               </div>
-              <div className="mt-12 text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 animate-pulse">Initializing Premium Experience</div>
+              <div className="mt-12 text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 dark:text-gray-500 animate-pulse">Initializing Premium Experience</div>
           </div>
       )}
 

@@ -83,10 +83,12 @@ const INITIAL_SETTINGS: SiteSettings = {
     { id: PaymentMethod.COD, enabled: true, nameOverride: "Cash on Delivery", instructions: "Pay with cash upon delivery." },
     { id: PaymentMethod.BANK_DEPOSIT, enabled: true, nameOverride: "Bank Deposit / Transfer", instructions: "Please upload your slip.", bankDetails: { bankName: "Commercial Bank", accountName: "Arobazzar PVT LTD", accountNumber: "1234567890", branch: "Main" } },
     { id: PaymentMethod.PAYPAL, enabled: true, nameOverride: "PayPal / Cards", instructions: "Pay via PayPal or Credit/Debit Card.", paypalClientId: "" },
-    { id: PaymentMethod.PAYHERE, enabled: false, nameOverride: "PayHere", instructions: "Pay securely with PayHere.", payhereMerchantId: "", payhereSecret: "", payhereEnv: "sandbox" },
+    { id: PaymentMethod.PAYHERE, enabled: true, nameOverride: "PayHere", instructions: "Pay securely with PayHere.", payhereMerchantId: "", payhereSecret: "", payhereEnv: "sandbox" },
     { id: PaymentMethod.BASE_ETH, enabled: true, nameOverride: "ETH (Base)", walletAddress: "0x37F01B225bce58E3ebB6331Febc051527EfEe484", instructions: "Secured by Smart Contract." },
     { id: PaymentMethod.BASE_USDC, enabled: true, nameOverride: "USDC (Base)", walletAddress: "0x37F01B225bce58E3ebB6331Febc051527EfEe484", instructions: "Secured by Smart Contract." },
-    { id: PaymentMethod.BASE_USDT, enabled: true, nameOverride: "USDT (Base)", walletAddress: "0x37F01B225bce58E3ebB6331Febc051527EfEe484", instructions: "Secured by Smart Contract." }
+    { id: PaymentMethod.BASE_USDT, enabled: true, nameOverride: "USDT (Base)", walletAddress: "0x37F01B225bce58E3ebB6331Febc051527EfEe484", instructions: "Secured by Smart Contract." },
+    { id: PaymentMethod.KOKO, enabled: true, nameOverride: "Koko (Pay in 3)", instructions: "Pay in 3 interest-free installments.", kokoMerchantId: "" },
+    { id: PaymentMethod.INSTALLMENTS, enabled: true, nameOverride: "Credit Card Installments", instructions: "Pay in monthly installments.", installmentProvider: "" }
   ]
 };
 
